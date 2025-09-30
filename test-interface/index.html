@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang= en>
+<head>
+  <meta charset=UTF-8 />
+  <meta name=viewport content=width=device-width initial-scale=1.0 />
+  <title>Lemonade Test Interface</title>
+  <link rel=stylesheet href=styles.css />
+</head>
+<body>
+  <header>
+    <h1>Lemonade Simulation - Test Interface</h1>
+    <p>Adjust sliders to see demand, revenue, costs, and profit in real-time.</p>
+  </header>
+
+  <main class=container>
+    <section class=panel>
+      <h2>Controls</h2>
+      <div class=control>
+        <label for=priceLevel>Price Level (1-10): <span id=priceLevelVal></span></label>
+        <input type=range id=priceLevel min=1 max=10 step=1 value=5 />
+      </div>
+      <div class=control>
+        <label for=qualityLevel>Quality Level (1-10): <span id=qualityLevelVal></span></label>
+        <input type=range id=qualityLevel min=1 max=10 step=1 value=5 />
+      </div>
+      <div class=control>
+        <label for=marketingPct>Marketing (% of revenue): <span id=marketingPctVal></span></label>
+        <input type=range id=marketingPct min=0 max=40 step=1 value=10 />
+      </div>
+      <div class=grid-2>
+        <div class=control>
+          <label for=weather>Weather</label>
+          <select id=weather>
+            <option value=normal selected>Normal</option>
+            <option value=hot>Hot</option>
+            <option value=cold>Cold</option>
+            <option value=rainy>Rainy</option>
+          </select>
+        </div>
+        <div class=control>
+          <label for=economy>Economy</label>
+          <select id=economy>
+            <option value=normal selected>Normal</option>
+            <option value=good>Good</option>
+            <option value=bad>Bad</option>
+          </select>
+        </div>
+      </div>
+      <div class=control>
+        <label for=competitors>Competitors in market</label>
+        <input type=number id=competitors min=1 max=10 step=1 value=4 />
+      </div>
+    </section>
+
+    <section class=panel>
+      <h2>Derived Values</h2>
+      <ul class=stats>
+        <li>Price per cup: <strong>$<span id=priceDollars></span></strong></li>
+        <li>Cost per cup: <strong>$<span id=costDollars></span></strong></li>
+        <li>Fair price (vs quality): <strong>$<span id=fairPrice></span></strong></li>
+        <li>Marketing effectiveness: <strong><span id=mktEff></span>%</strong></li>
+        <li>Demand multiplier: <strong><span id=demandMult></span>x</strong></li>
+        <li>Attractiveness index: <strong><span id=attractIdx></span></strong></li>
+        <li>Market share: <strong><span id=marketShare></span>%</strong></li>
+      </ul>
+    </section>
+
+    <section class=panel>
+      <h2>Results (this company)</h2>
+      <ul class=stats>
+        <li>Expected units sold: <strong><span id=units></span></strong></li>
+        <li>Revenue: <strong>$<span id=revenue></span></strong></li>
+        <li>Ingredient cost: <strong>$<span id=ingredientCost></span></strong></li>
+        <li>Marketing spend: <strong>$<span id=marketingSpend></span></strong></li>
+        <li>Profit: <strong>$<span id=profit></span></strong></li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    <p>Baseline total demand per turn: 1000 cups</p>
+  </footer>
+
+  <script src=app3.js></script>
+</body>
+</html>

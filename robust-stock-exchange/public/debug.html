@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Test</title>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+</head>
+<body>
+    <h1>Debug Test</h1>
+    <div id="status">Connecting...</div>
+    <div id="gameState">No state yet</div>
+    <button onclick="addParticipant()">Add Participant</button>
+    <button onclick="startIPO()">Start IPO</button>
+    
+    <script>
+        let socket = null;
+        let gameState = {};
+        
+        function initializeSocket() {
+            if (typeof io === 'undefined') {
+                console.error('Socket.io not loaded');
+                document.getElementById('status').textContent = 'Socket.io not loaded';
+                return;
+            }
+            
+            socket = io('http://localhost:3003');
+            
+            socket.on('connect', () => {
+                console.log('Connected to server');
+                document.getElementById('status').textContent = 'Connected to server';
+            });
+            
+            socket.on('gameStateUpdate', (state) => {
+                console.log('Game state received:', state);
+                gameState = state;
+                document.getElementById('gameState').innerHTML = 
+                    '<pre>' + JSON.stringify(state, null, 2) + '</pre>';
+            });
+            
+            socket.on('disconnect', () => {
+                console.log('Disconnected from server');
+                document.getElementById('status').textContent = 'Disconnected from server';
+            });
+        }
+        
+        function addParticipant() {
+            const name = prompt('Enter participant name:');
+            if (name) {
+                fetch('/api/participant', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Participant added:', data);
+                    alert('Participant added: ' + JSON.stringify(data));
+                })
+                .catch(error => {
+                    console.error('Error adding participant:', error);
+                    alert('Error: ' + error.message);
+                });
+            }
+        }
+        
+        function startIPO() {
+            fetch('/api/phase', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phase: 'ipo' })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Phase changed:', data);
+                alert('Phase changed: ' + JSON.stringify(data));
+            })
+            .catch(error => {
+                console.error('Error changing phase:', error);
+                alert('Error: ' + error.message);
+            });
+        }
+        
+        // Initialize when page loads
+        window.onload = initializeSocket;
+    </script>
+</body>
+</html>

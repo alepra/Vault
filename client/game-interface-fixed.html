@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lemonade Stand Stock Market Game</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f0f9ff; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .game-area { display: flex; gap: 20px; }
+        .left-panel, .middle-panel, .right-panel { flex: 1; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .portfolio { background: #f8fafc; border: 1px solid #e2e8f0; }
+        .trading-interface { background: #fefce8; border: 1px solid #facc15; }
+        .participants { background: #f0fdf4; border: 1px solid #22c55e; }
+        button { background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #2563eb; }
+        input { padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; margin: 5px; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .success { background: #d1fae5; color: #065f46; }
+        .error { background: #fee2e2; color: #991b1b; }
+        .info { background: #dbeafe; color: #1e40af; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🍋 Lemonade Stand Stock Market Game</h1>
+            <div id="status" class="status info">Connecting...</div>
+        </div>
+        
+        <div id="lobbyInterface" style="display: block;">
+            <div style="text-align: center; padding: 40px;">
+                <h2>Welcome to the Lemonade Stand Stock Market!</h2>
+                <p>Enter your name to join the game:</p>
+                <input type="text" id="participantName" placeholder="Your name" style="width: 200px; padding: 10px; font-size: 16px;">
+                <br><br>
+                <button onclick="joinGame()" id="joinButton" disabled>Join Game</button>
+                <button onclick="startGame()" id="startButton" style="display: none;">Start Game</button>
+            </div>
+        </div>
+        
+        <div id="gameInterface" style="display: none;">
+            <div class="game-area">
+                <div class="left-panel participants">
+                    <h3>👥 Participants</h3>
+                    <div id="participantsList"></div>
+                </div>
+                
+                <div class="middle-panel portfolio">
+                    <h3>💰 Your Portfolio</h3>
+                    <div id="yourPortfolio">
+                        <p>Portfolio data will appear here...</p>
+                    </div>
+                </div>
+                
+                <div class="right-panel trading-interface">
+                    <h3>📈 Trading Interface</h3>
+                    <div id="tradingContent">
+                        <p>Trading interface will appear here...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let socket = null;
+        let gameData = null;
+        let participant = null;
+
+        function joinGame() {
+            const name = document.getElementById('participantName').value.trim();
+            if (!name) return;
+            
+            if (socket) {
+                socket.emit('joinGame', { name });
+                document.getElementById('joinButton').style.display = 'none';
+                document.getElementById('startButton').style.display = 'inline-block';
+            }
+        }
+
+        function startGame() {
+            if (socket) {
+                socket.emit('startGame');
+            }
+        }
+
+        function updatePortfolio() {
+            const portfolioDiv = document.getElementById('yourPortfolio');
+            if (!portfolioDiv || !gameData) return;
+
+            const participants = gameData.participants || [];
+            const humanPlayer = participants.find(p => p.isHuman);
+            
+            if (!humanPlayer) {
+                portfolioDiv.innerHTML = '<p>No player data found</p>';
+                return;
+            }
+
+            const cash = humanPlayer.remainingCapital || humanPlayer.capital || 0;
+            const shares = humanPlayer.shares || {};
+            const companies = gameData.companies || [];
+            
+            let stockValue = 0;
+            let holdingsHTML = '';
+            
+            companies.forEach(company => {
+                const shareCount = shares[company.id] || 0;
+                const price = company.ipoPrice || company.currentPrice || 0;
+                const value = shareCount * price;
+                stockValue += value;
+                
+                if (shareCount > 0) {
+                    holdingsHTML += `<div>${company.name}: ${shareCount} shares @ $${price.toFixed(2)} = $${value.toFixed(2)}</div>`;
+                }
+            });
+
+            const netWorth = cash + stockValue;
+            
+            portfolioDiv.innerHTML = `
+                <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb;">
+                    <h4>Your Holdings</h4>
+                    <p><strong>Cash:</strong> $${cash.toFixed(2)}</p>
+                    <p><strong>Stock Value:</strong> $${stockValue.toFixed(2)}</p>
+                    <p><strong>Net Worth:</strong> $${netWorth.toFixed(2)}</p>
+                    ${holdingsHTML ? '<div style="margin-top: 10px;"><strong>Holdings:</strong><br>' + holdingsHTML + '</div>' : ''}
+                </div>
+            `;
+        }
+
+        function updateParticipants() {
+            const participantsDiv = document.getElementById('participantsList');
+            if (!participantsDiv || !gameData) return;
+
+            const participants = gameData.participants || [];
+            let html = '';
+            
+            participants.forEach(p => {
+                const cash = p.remainingCapital || p.capital || 0;
+                const shares = p.shares || {};
+                const companies = gameData.companies || [];
+                
+                let stockValue = 0;
+                companies.forEach(company => {
+                    const shareCount = shares[company.id] || 0;
+                    const price = company.ipoPrice || company.currentPrice || 0;
+                    stockValue += shareCount * price;
+                });
+                
+                const netWorth = cash + stockValue;
+                
+                html += `
+                    <div style="padding: 8px; margin: 4px 0; border: 1px solid #e5e7eb; border-radius: 4px; background: ${p.isHuman ? '#fef3c7' : '#f3f4f6'};">
+                        <strong>${p.name}</strong> ${p.isHuman ? '(You)' : ''}<br>
+                        Cash: $${cash.toFixed(2)} | Net: $${netWorth.toFixed(2)}
+                    </div>
+                `;
+            });
+            
+            participantsDiv.innerHTML = html;
+        }
+
+        function updateTradingInterface() {
+            const tradingDiv = document.getElementById('tradingContent');
+            if (!tradingDiv || !gameData) return;
+
+            const companies = gameData.companies || [];
+            let html = '<div style="display: grid; gap: 10px;">';
+            
+            companies.forEach(company => {
+                const price = company.ipoPrice || company.currentPrice || 0;
+                html += `
+                    <div style="border: 1px solid #e5e7eb; padding: 15px; border-radius: 8px;">
+                        <h4>${company.name}</h4>
+                        <p>Price: $${price.toFixed(2)}</p>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="number" id="shares_${company.id}" placeholder="Shares" style="width: 80px;">
+                            <input type="number" id="price_${company.id}" placeholder="Price" step="0.01" value="${price.toFixed(2)}" style="width: 80px;">
+                            <button onclick="submitOrder('${company.id}', 'buy')">Buy</button>
+                            <button onclick="submitOrder('${company.id}', 'sell')">Sell</button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            tradingDiv.innerHTML = html;
+        }
+
+        function submitOrder(companyId, action) {
+            const shares = document.getElementById(`shares_${companyId}`).value;
+            const price = document.getElementById(`price_${companyId}`).value;
+            
+            if (!shares || !price) {
+                alert('Please enter shares and price');
+                return;
+            }
+            
+            if (socket) {
+                socket.emit('submitTradingOrder', {
+                    participantId: participant?.id,
+                    companyId: companyId,
+                    orderType: action,
+                    shares: parseInt(shares),
+                    price: parseFloat(price)
+                });
+            }
+        }
+
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        function initializeSocket() {
+            socket = io('http://localhost:3001');
+            
+            socket.on('connect', () => {
+                updateStatus('Connected to server', 'success');
+            });
+            
+            socket.on('disconnect', () => {
+                updateStatus('Disconnected from server', 'error');
+            });
+            
+            socket.on('gameStateUpdate', (data) => {
+                gameData = data;
+                updatePortfolio();
+                updateParticipants();
+                updateTradingInterface();
+            });
+            
+            socket.on('participantUpdate', (data) => {
+                participant = data;
+            });
+            
+            socket.on('orderSuccess', (data) => {
+                updateStatus('Order executed successfully!', 'success');
+                setTimeout(() => updateStatus('Ready'), 1000);
+            });
+            
+            socket.on('orderError', (data) => {
+                updateStatus('Order failed: ' + data.message, 'error');
+                setTimeout(() => updateStatus('Ready'), 3000);
+            });
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeSocket();
+            
+            // Enable join button when name is entered
+            document.getElementById('participantName').addEventListener('input', function() {
+                const button = document.getElementById('joinButton');
+                button.disabled = this.value.trim() === '';
+            });
+        });
+    </script>
+</body>
+</html>

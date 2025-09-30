@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🍋 Lemonade Stand Stock Market - Clean Architecture</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+</head>
+<body>
+    <!-- Connection Status -->
+    <div class="connection-status">
+        <div class="status-item">
+            <div class="dot" id="backendDot"></div>
+            <span>Backend: <span id="backendText">Checking...</span></span>
+        </div>
+        <div class="status-item">
+            <div class="dot" id="socketDot"></div>
+            <span>WS: <span id="socketText">Disconnected</span></span>
+        </div>
+    </div>
+
+    <!-- Phase Display -->
+    <div class="phase-display" id="phaseDisplay">
+        <div class="current-phase" id="currentPhase">🎮 LOBBY</div>
+        <div class="phase-timer" id="phaseTimer" style="display: none;">--:--</div>
+    </div>
+
+    <!-- Welcome Page -->
+    <div id="welcomePage" class="welcome-page">
+        <div class="welcome-content">
+            <h1>🍋 Lemonade Stand Stock Market</h1>
+            <p class="subtitle">Clean Architecture • Real-time Multiplayer • AI Bots</p>
+            
+            <div class="game-overview">
+                <h3>🎯 Game Overview</h3>
+                <div class="features-grid">
+                    <div class="feature">💰 Start with $1,000</div>
+                    <div class="feature">🏢 4 Lemonade Stand Companies</div>
+                    <div class="feature">📈 Dutch Auction IPO System</div>
+                    <div class="feature">🤖 15 AI Bot Personalities</div>
+                    <div class="feature">👑 Become CEO (35% ownership)</div>
+                    <div class="feature">⚡ Real-time Trading</div>
+                </div>
+            </div>
+            
+            <button onclick="enterLobby()" class="start-button">
+                🚀 Enter Game Lobby
+            </button>
+        </div>
+    </div>
+
+    <!-- Game Lobby -->
+    <div id="lobby" class="lobby" style="display: none;">
+        <h2>🎮 Game Lobby</h2>
+        <div id="joinForm" class="join-form">
+            <label for="participantName">Enter your name:</label>
+            <input type="text" id="participantName" placeholder="Enter your name" maxlength="50">
+            <button onclick="joinGame()" id="joinButton" disabled>Join Game</button>
+        </div>
+        <div id="participantInfo" class="participant-info" style="display: none;">
+            <div class="status connected">
+                <div class="dot connected"></div>
+                <span id="welcomeText">Welcome!</span>
+            </div>
+            <button onclick="startGame()" id="startButton" class="start-game" style="display: none;">
+                🚀 START IPO BIDDING
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Game Display -->
+    <div id="mainGameDisplay" class="main-game" style="display: none;">
+        <!-- Phase Indicator Header -->
+        <div class="phase-indicator">
+            <span id="currentPhaseIndicator">🎮 GAME PHASE: LOBBY</span>
+        </div>
+        
+        <div class="game-layout">
+            <!-- Left Third: All Participants -->
+            <div class="participants-panel">
+                <h2>👥 All Participants</h2>
+                <div class="participants-header">
+                    <span>Player</span>
+                    <span>Net Worth</span>
+                </div>
+                <div id="participantsList" class="participants-list"></div>
+            </div>
+
+            <!-- Middle Third: Your Portfolio + CEO Controls -->
+            <div class="portfolio-panel">
+                <h2>💼 Your Portfolio</h2>
+                <div id="portfolioContent" class="portfolio-content">
+                    <div class="portfolio-summary">
+                        <div class="cash">💰 Cash: $<span id="yourCash">1000</span></div>
+                        <div class="net-worth">📊 Net Worth: $<span id="yourNetWorth">1000</span></div>
+                    </div>
+                    <div id="yourShares" class="your-shares"></div>
+                </div>
+                
+                <!-- CEO Controls (if applicable) -->
+                <div id="ceoControls" class="ceo-controls" style="display: none;">
+                    <h3>👑 CEO Controls</h3>
+                    <div class="ceo-company" id="ceoCompany"></div>
+                </div>
+            </div>
+
+            <!-- Right Third: Market Data + Trading -->
+            <div class="market-panel">
+                <h2>📈 Market Data</h2>
+                <div id="marketContent" class="market-content">
+                    <div id="companiesList" class="companies-list"></div>
+                </div>
+                
+                <!-- Trading Interface -->
+                <div id="tradingInterface" class="trading-interface" style="display: none;">
+                    <h3>💹 Trading</h3>
+                    <div class="trading-form">
+                        <select id="tradingCompany" class="trading-select">
+                            <option value="">Select Company</option>
+                        </select>
+                        <div class="trading-inputs">
+                            <input type="number" id="tradingShares" placeholder="Shares" min="1">
+                            <input type="number" id="tradingPrice" placeholder="Price" step="0.01" min="0.01">
+                        </div>
+                        <div class="trading-buttons">
+                            <button onclick="submitBuyOrder()" class="buy-button">🟢 BUY</button>
+                            <button onclick="submitSellOrder()" class="sell-button">🔴 SELL</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- IPO Interface -->
+    <div id="ipoInterface" class="ipo-interface" style="display: none;">
+        <h2>📊 IPO Bidding - Dutch Auction</h2>
+        <p class="ipo-description">
+            Bid on shares of each company. Everyone pays the same clearing price (lowest price that sells all shares).
+        </p>
+        <div id="ipoBiddingForm" class="ipo-bidding-form"></div>
+        <button onclick="submitIPOBids()" class="submit-bids-button">📤 Submit IPO Bids</button>
+    </div>
+
+    <!-- Newspaper Interface -->
+    <div id="newspaperInterface" class="newspaper-interface" style="display: none;">
+        <h2>📰 Market News</h2>
+        <div id="newspaperContent" class="newspaper-content">
+            <div class="news-item">
+                <h3>🎉 IPO Results</h3>
+                <div id="ipoResults" class="ipo-results"></div>
+            </div>
+            <div class="news-item">
+                <h3>👑 CEO Announcements</h3>
+                <div id="ceoAnnouncements" class="ceo-announcements"></div>
+            </div>
+        </div>
+        <button onclick="proceedToTrading()" class="proceed-button">➡️ Proceed to Trading</button>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>

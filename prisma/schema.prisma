@@ -1,0 +1,84 @@
+// Prisma schema for the old lemonade stand game
+// This will make database operations more reliable
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./server/game.db"
+}
+
+// Participants table
+model Participant {
+  id          String   @id @default(cuid())
+  name        String
+  isBot       Boolean  @default(false)
+  cash        Float    @default(1000.0)
+  netWorth    Float    @default(1000.0)
+  sessionId   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relationships
+  shares      Share[]
+  trades      Trade[]  @relation("ParticipantTrades")
+  
+  @@map("participants")
+}
+
+// Companies table
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  totalShares Int      @default(1000)
+  currentPrice Float   @default(1.0)
+  ipoPrice    Float?
+  sessionId   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relationships
+  shares      Share[]
+  trades      Trade[]  @relation("CompanyTrades")
+  
+  @@map("companies")
+}
+
+// Share holdings
+model Share {
+  id            String   @id @default(cuid())
+  participantId String
+  companyId     String
+  shares        Int      @default(0)
+  avgPrice      Float    @default(0.0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relationships
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  company       Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  
+  @@unique([participantId, companyId])
+  @@map("shares")
+}
+
+// Trades
+model Trade {
+  id            String   @id @default(cuid())
+  buyerId       String
+  sellerId      String
+  companyId     String
+  shares        Int
+  price         Float
+  totalValue    Float
+  sessionId     String
+  createdAt     DateTime @default(now())
+  
+  // Relationships
+  buyer         Participant @relation("ParticipantTrades", fields: [buyerId], references: [id])
+  company       Company     @relation("CompanyTrades", fields: [companyId], references: [id])
+  
+  @@map("trades")
+}

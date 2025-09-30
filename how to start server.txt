@@ -1,0 +1,8 @@
+Open terminal in root directory (should say C:\Users\alepr\Lemonade Stand>)
+Type:
+
+node server/index-modular.js
+
+Open browser and enter url:
+
+http://localhost:3001/game-interface.html

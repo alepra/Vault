@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta http-equiv="X-XSS-Protection" content="1; mode=block">
+    <title>Lemonade Stand Stock Market - Test</title>
+    <link rel="stylesheet" href="test.css">
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div style="font-size: 48px; margin-bottom: 20px;">🍋</div>
+            <h1>Lemonade Stand Stock Market</h1>
+            <p>Real-time stock trading simulation</p>
+        </div>
+
+        <div class="status" id="backendStatus">
+            <div class="dot checking"></div>
+            <span>Backend Server: <span id="backendText">Checking...</span></span>
+        </div>
+
+        <div class="status" id="socketStatus">
+            <div class="dot disconnected"></div>
+            <span>WebSocket: <span id="socketText">Disconnected</span></span>
+        </div>
+
+        <div class="lobby" id="lobby">
+            <h3>Game Lobby</h3>
+            <div id="joinForm">
+                <input type="text" id="participantName" placeholder="Enter your name" maxlength="50">
+                <button onclick="joinGame()" id="joinButton" disabled>Join Game</button>
+            </div>
+            <div id="participantInfo" style="display: none;">
+                <div class="status connected">
+                    <div class="dot connected"></div>
+                    <span id="welcomeText">Welcome!</span>
+                </div>
+                <button onclick="startGame()" id="startButton" class="start-game" style="display: none;">Start Game</button>
+            </div>
+        </div>
+
+        <div class="game-data" id="gameData" style="display: none;">
+            <h4>Game Data:</h4>
+            <pre id="gameDataContent"></pre>
+        </div>
+    </div>
+
+    <script>
+        let socket = null;
+        let participant = null;
+        let gameData = null;
+
+        // Test backend connection
+        async function testBackend() {
+            try {
+                const response = await fetch('http://localhost:3001/api/health');
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    updateStatus('backendStatus', 'connected', 'Connected');
+                    initializeSocket();
+                } else {
+                    updateStatus('backendStatus', 'disconnected', 'Error');
+                }
+            } catch (error) {
+                console.error('Backend connection failed:', error);
+                updateStatus('backendStatus', 'disconnected', 'Disconnected');
+            }
+        }
+
+        function updateStatus(elementId, status, text) {
+            const element = document.getElementById(elementId);
+            const dot = element.querySelector('.dot');
+            const textElement = element.querySelector('span:last-child');
+            
+            element.className = `status ${status}`;
+            dot.className = `dot ${status}`;
+            textElement.textContent = text;
+        }
+
+        function initializeSocket() {
+            socket = io('http://localhost:3001');
+            
+            socket.on('connect', () => {
+                console.log('Connected to backend');
+                updateStatus('socketStatus', 'connected', 'Connected');
+            });
+
+            socket.on('gameStateUpdate', (game) => {
+                console.log('Game state updated:', game);
+                gameData = game;
+                updateGameDisplay();
+            });
+
+            socket.on('participantUpdate', (participantData) => {
+                console.log('Participant updated:', participantData);
+                participant = participantData;
+                updateParticipantDisplay();
+            });
+
+            socket.on('disconnect', () => {
+                console.log('Disconnected from backend');
+                updateStatus('socketStatus', 'disconnected', 'Disconnected');
+            });
+
+            socket.on('connect_error', (error) => {
+                console.error('Socket connection error:', error);
+                updateStatus('socketStatus', 'disconnected', 'Connection Error');
+            });
+        }
+
+        function updateGameDisplay() {
+            if (gameData) {
+                document.getElementById('gameData').style.display = 'block';
+                document.getElementById('gameDataContent').textContent = JSON.stringify(gameData, null, 2);
+            }
+        }
+
+        function updateParticipantDisplay() {
+            if (participant) {
+                document.getElementById('joinForm').style.display = 'none';
+                document.getElementById('participantInfo').style.display = 'block';
+                document.getElementById('welcomeText').textContent = `Welcome, ${participant.name}! Capital: $${participant.capital}`;
+                
+                if (gameData && gameData.phase === 'lobby') {
+                    document.getElementById('startButton').style.display = 'inline-block';
+                }
+            }
+        }
+
+        function joinGame() {
+            const name = document.getElementById('participantName').value.trim();
+            if (socket && name) {
+                socket.emit('joinGame', { name: name });
+            }
+        }
+
+        function startGame() {
+            if (socket) {
+                socket.emit('startGame');
+            }
+        }
+
+        // Enable join button when name is entered
+        document.getElementById('participantName').addEventListener('input', function() {
+            const button = document.getElementById('joinButton');
+            button.disabled = !this.value.trim();
+        });
+
+        // Test backend connection on page load
+        testBackend();
+    </script>
+</body>
+</html>

@@ -1,0 +1,2610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-XSS-Protection" content="1; mode=block">
+    <title>Lemonade Stand Stock Market - Game Interface</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <link rel="stylesheet" href="test.css?v=20250114001">
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+</head>
+<body>
+    <!-- Connection Status (Always Visible) -->
+    <div style="position: fixed; top: 5px; right: 5px; z-index: 9999; background: rgba(0,0,0,0.8); color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.7em; font-family: monospace; border: 1px solid rgba(255,255,255,0.2);">
+        <div style="display: flex; align-items: center; gap: 4px;">
+            <div class="dot checking" style="width: 6px; height: 6px; border-radius: 50%;"></div>
+            <span>Backend: <span id="backendText">Checking...</span></span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 4px;">
+            <div class="dot disconnected" style="width: 6px; height: 6px; border-radius: 50%;"></div>
+            <span>WS: <span id="socketText">Disconnected</span></span>
+        </div>
+    </div>
+
+    <!-- Simple Phase Display -->
+    <div class="phase-display" id="phaseDisplay">
+        <div class="current-phase" id="currentPhase"></div>
+        <div class="phase-timer" id="phaseTimer" style="display: none;">--:--</div>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <div style="font-size: 48px; margin-bottom: 20px;">🍋</div>
+            <h1>Lemonade Stand Stock Market</h1>
+            <p>Real-time stock trading simulation</p>
+        </div>
+
+        <!-- Welcome Page -->
+        <div id="welcomePage" style="display: block; text-align: center; padding: 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; min-height: 100vh;">
+            <h1 style="font-size: 3em; margin-bottom: 20px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);">🍋 Lemonade Stand Stock Market</h1>
+            <p style="font-size: 1.5em; margin-bottom: 30px; text-shadow: 1px 1px 2px rgba(0,0,0,0.3);">Welcome to the Ultimate Investment Challenge!</p>
+            <div style="background: rgba(255,255,255,0.1); padding: 30px; border-radius: 15px; margin: 30px auto; max-width: 600px; backdrop-filter: blur(10px);">
+                <h3 style="margin-top: 0;">🎯 Game Overview</h3>
+                <p>• Start with $1,000 to invest in 4 lemonade stand companies</p>
+                <p>• Bid in IPO auctions to acquire shares</p>
+                <p>• Trade stocks in real-time markets</p>
+                <p>• Become CEO by owning 35%+ of any company</p>
+                <p>• Manage your company with price, quality, and marketing controls</p>
+            </div>
+            <button onclick="enterLobby()" style="background: #059669; color: white; border: none; padding: 15px 30px; font-size: 1.2em; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.2); margin-right: 10px;">🚀 Enter Game Lobby</button>
+        </div>
+
+        <!-- Game Lobby -->
+        <div class="lobby" id="lobby" style="display: none;">
+            <h3>🎮 Game Lobby</h3>
+            <div id="joinForm">
+                <label for="participantName">
+                    Enter your name:
+                    <input type="text" id="participantName" placeholder="Enter your name" maxlength="50" title="Enter your name to join the game" aria-label="Enter your name to join the game">
+                </label>
+                <button onclick="joinGame()" id="joinButton" disabled>Join Game</button>
+            </div>
+            <div id="participantInfo" style="display: none;">
+                <div class="status connected">
+                    <div class="dot connected"></div>
+                    <span id="welcomeText">Welcome!</span>
+                </div>
+                <button onclick="startGame()" id="startButton" class="start-game" style="display: none; background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: white; border: none; padding: 20px 40px; font-size: 1.4em; font-weight: bold; border-radius: 12px; cursor: pointer; box-shadow: 0 6px 20px rgba(5, 150, 105, 0.4); text-shadow: 1px 1px 2px rgba(0,0,0,0.3); transition: all 0.3s ease;">🚀 START IPO BIDDING</button>
+            </div>
+        </div>
+
+        <!-- Game Phase Display -->
+        <div id="gamePhase" style="display: none;">
+            <h3>GAME PHASE: <span id="phaseText">Lobby</span></h3>
+            <div id="phaseContent"></div>
+        </div>
+
+        <!-- Main Game Display (Three Column Layout) -->
+        <div id="mainGameDisplay" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: white; z-index: 1000; overflow-y: auto;">
+            <!-- Phase Indicator Header -->
+            <div id="phaseIndicator" style="position: fixed; top: 0; left: 0; right: 0; background: linear-gradient(135deg, #1f2937 0%, #374151 100%); color: white; padding: 15px; text-align: center; font-size: 20px; font-weight: bold; z-index: 1001; box-shadow: 0 2px 10px rgba(0,0,0,0.3);">
+                <span id="currentPhaseIndicator">🎮 GAME PHASE: LOBBY</span>
+            </div>
+            
+            <!-- Force trading button removed - using Ready button system instead -->
+            <div style="display: flex; height: 100vh; margin-top: 60px;">
+                <!-- Left Third: All Participants -->
+                <div style="flex: 1; min-width: 33vw; max-width: 33vw; border-right: 2px solid #e5e7eb; padding: 20px; overflow-y: auto; background: #f9fafb;">
+                    <h2 style="margin-top: 0; color: #1f2937;">👥 All Participants</h2>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 8px; background: #e5e7eb; border-radius: 4px; font-weight: bold; font-size: 0.9em;">
+                        <span>Player</span>
+                        <span>Net Worth</span>
+                    </div>
+                    <div id="participantsList"></div>
+        </div>
+
+                <!-- Middle Third: Your Financial Situation + CEO Controls -->
+                <div style="flex: 1; min-width: 33vw; max-width: 33vw; border-right: 2px solid #e5e7eb; padding: 20px; overflow-y: auto; background: #f0f9ff;">
+                    <h2 style="margin-top: 0; color: #1f2937;">💰 Your Portfolio</h2>
+                    <div id="yourPortfolio"></div>
+                    
+                    <!-- CEO Controls (hidden by default) -->
+                    <div id="ceoControls" style="display: none; margin-top: 20px; padding: 15px; border: 2px solid #dc2626; border-radius: 8px; background: #fef2f2;">
+                        <h3 style="color: #dc2626; margin-top: 0;">👑 CEO Controls</h3>
+                        <div id="ceoControlPanel"></div>
+                    </div>
+                    
+                    <!-- Trading Interface (moved from separate page) -->
+                    <div id="tradingInterfaceInDisplay" style="margin-top: 20px; padding: 15px; border: 2px solid #059669; border-radius: 8px; background: #f0fdf4;">
+                        <h3 style="color: #059669; margin-top: 0;">📈 Trading Interface</h3>
+                        <div id="tradingInterfaceContent"></div>
+                        
+                        <!-- Company Tabs and Panels (needed by JavaScript) -->
+                        <div id="companyTabs" style="display:flex; gap:8px; margin:10px 0; flex-wrap:wrap;"></div>
+                        <div id="companyPanels"></div>
+                        
+                    </div>
+                    
+                    <!-- Ready Button for Phase Advancement (Hidden during newspaper phase) -->
+                    <div id="mainGameReadyButton" style="text-align: center; margin-top: 20px; display: none;">
+                        <button onclick="readyForNextPhase()" style="background: #059669; color: white; padding: 16px 32px; font-size: 18px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.2);">✅ Ready for Next Phase</button>
+                    </div>
+                    
+                    <!-- Trading is now automatic when you enter the trading phase -->
+                </div>
+                
+                <!-- Right Third: Companies & Market Data -->
+                <div style="flex: 1; min-width: 33vw; max-width: 33vw; padding: 20px; overflow-y: auto; background: white;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h2 style="margin: 0; color: #1f2937;">🏢 Companies</h2>
+                    </div>
+                    <div id="companiesList"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- IPO Bidding Interface -->
+        <div id="ipoInterface" style="display: none;">
+            <div id="ipoInstructions">
+                <div style="background: #f0f9ff; padding: 15px; border-radius: 8px; margin: 10px 0;">
+                    <h4>Your Capital: $<span id="yourCapital">1000</span></h4>
+                    <p>Remaining after bids: $<span id="remainingCapital">1000</span></p>
+                </div>
+            </div>
+            <div id="ipoBiddingForm">
+                <!-- IPO bidding forms will be generated here -->
+            </div>
+            <div style="margin-top: 20px;">
+                <button onclick="submitIPOBids()" id="submitBidsButton" class="start-game">Submit IPO Bids</button>
+                <button onclick="skipIPO()" id="skipIPOButton" style="margin-left: 10px; background: #6b7280;">Skip IPO (Watch AI Bots)</button>
+                <button onclick="readyForNextPhase()" id="readyButton" style="margin-left: 10px; background: #059669; color: white; padding: 12px 24px; font-size: 16px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; display: none;">✅ Ready for Next Phase</button>
+                <button onclick="forceIPOInterface()" id="forceIPOButton" style="margin-left: 10px; background: #f59e0b; display: none;">Force IPO Interface (Chrome Fix)</button>
+                <button onclick="forceIPOInterface()" id="edgeForceButton" style="margin-left: 10px; background: #dc2626; color: white; display: none;">🔧 EDGE IPO FIX</button>
+            </div>
+        </div>
+
+        <!-- Newspaper Display - Full Page -->
+        <div id="newspaperDisplay" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); z-index: 2000; overflow-y: auto; font-family: 'Times New Roman', serif;">
+            
+            <!-- Newspaper Header -->
+            <div style="background: linear-gradient(135deg, #1f2937 0%, #374151 100%); color: white; padding: 20px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+                <h1 style="margin: 0; font-size: 3em; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);">📰 THE LEMONADE STAND TIMES</h1>
+                <p style="margin: 10px 0 0 0; font-size: 1.2em; font-style: italic;">Your Neighborhood's Premier Financial News</p>
+                <p style="margin: 5px 0 0 0; font-size: 1em; opacity: 0.9;">📅 <span id="newspaperDate"></span> | 🌤️ <span id="newspaperWeather"></span></p>
+            </div>
+
+            <!-- Main Content Area -->
+            <div style="padding: 30px; max-width: 1200px; margin: 0 auto;">
+                
+                <!-- Breaking News Banner -->
+                <div style="background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%); color: white; padding: 15px; border-radius: 10px; margin-bottom: 25px; text-align: center; box-shadow: 0 4px 15px rgba(220, 38, 38, 0.3);">
+                    <h2 style="margin: 0; font-size: 1.8em; font-weight: bold;">🚨 BREAKING: ALL COMPANIES GO PUBLIC! 🚨</h2>
+                    <p style="margin: 8px 0 0 0; font-size: 1.1em;">Historic IPO Day as Four Lemonade Stands Enter the Market</p>
+            </div>
+
+                <!-- Two Column Layout -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px;">
+                    
+                    <!-- Left Column: IPO Results -->
+                    <div style="background: white; padding: 25px; border-radius: 15px; box-shadow: 0 8px 25px rgba(0,0,0,0.1); border-left: 6px solid #059669;">
+                        <h3 style="color: #059669; margin-top: 0; font-size: 1.5em; border-bottom: 2px solid #059669; padding-bottom: 10px;">📈 IPO RESULTS</h3>
+                        <div id="ipoResultsContent"></div>
+        </div>
+
+                    <!-- Right Column: CEO Appointments -->
+                    <div style="background: white; padding: 25px; border-radius: 15px; box-shadow: 0 8px 25px rgba(0,0,0,0.1); border-left: 6px solid #dc2626;">
+                        <h3 style="color: #dc2626; margin-top: 0; font-size: 1.5em; border-bottom: 2px solid #dc2626; padding-bottom: 10px;">👑 CEO APPOINTMENTS</h3>
+                        <div id="ceoAppointmentsContent"></div>
+            </div>
+        </div>
+
+                <!-- Market Summary -->
+                <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); padding: 25px; border-radius: 15px; margin-bottom: 30px; border: 2px solid #0ea5e9;">
+                    <h3 style="color: #0ea5e9; margin-top: 0; font-size: 1.5em; border-bottom: 2px solid #0ea5e9; padding-bottom: 10px;">📊 MARKET SUMMARY</h3>
+                    <div id="marketSummaryContent"></div>
+                </div>
+
+                <!-- Weather & Events -->
+                <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 25px; border-radius: 15px; margin-bottom: 30px; border: 2px solid #f59e0b;">
+                    <h3 style="color: #f59e0b; margin-top: 0; font-size: 1.5em; border-bottom: 2px solid #f59e0b; padding-bottom: 10px;">🌤️ WEATHER & EVENTS</h3>
+                    <div id="weatherEventsContent"></div>
+                </div>
+
+                <!-- Ready Button - BIG AND CLEAR -->
+                <div style="text-align: center; margin-top: 60px; padding: 40px; background: rgba(255,255,255,0.1); border-radius: 20px; backdrop-filter: blur(10px);">
+                    <h2 style="color: #1f2937; margin-bottom: 20px; font-size: 1.8em;">🎯 Ready to Start Trading?</h2>
+                    <p style="color: #374151; margin-bottom: 30px; font-size: 1.1em;">Click the button below to advance to the trading phase where you can buy and sell shares!</p>
+                    <button onclick="readyForNextPhase()" style="background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: white; padding: 25px 50px; font-size: 1.5em; font-weight: bold; border: none; border-radius: 15px; cursor: pointer; box-shadow: 0 10px 30px rgba(5, 150, 105, 0.4); text-shadow: 1px 1px 2px rgba(0,0,0,0.3); transition: all 0.3s ease; transform: scale(1);" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">🚀 START TRADING NOW</button>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- Company Management (Future) -->
+        <div id="companyManagement" style="display: none;">
+            <h3>Company Management</h3>
+            <p>Coming soon! This is where CEOs will manage their companies.</p>
+        </div>
+
+        <!-- Hidden elements needed for JavaScript functionality -->
+        <div id="gameDataContent" style="display: none;"></div>
+        <div id="browserInfo" style="display: none;">
+                    <p><strong>User Agent:</strong> <span id="userAgent"></span></p>
+                    <p><strong>Browser:</strong> <span id="browserType"></span></p>
+                    <p><strong>WebSocket Status:</strong> <span id="wsStatus">Unknown</span></p>
+                    <p><strong>Connection Time:</strong> <span id="connectionTime">Not connected</span></p>
+                </div>
+        
+        <!-- Ticker Tape (executed trades) -->
+        <div id="tickerTape" style="position: sticky; bottom: 0; width: 100%; background: #111827; color: #f9fafb; padding: 6px 10px; border-radius: 6px; margin-top: 16px; overflow: hidden; white-space: nowrap; display: none;">
+            <span id="tickerContent" style="display:inline-block; animation: tickerScroll 40s linear infinite;"></span>
+        </div>
+    </div>
+
+    <style>
+        @keyframes tickerScroll {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(-100%); }
+        }
+        .tab-button { padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; background:#f3f4f6; cursor:pointer; }
+        .tab-button.active { background:#ecfeff; border-color:#06b6d4; color:#0e7490; }
+        .price-up { color:#059669; }
+        .price-down { color:#dc2626; }
+        
+        /* Connection Status Dots */
+        .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .dot.connected { background-color: #10b981; }
+        .dot.disconnected { background-color: #ef4444; }
+        .dot.checking { background-color: #f59e0b; }
+        
+        /* Simple Phase Display */
+        .phase-display {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            padding: 10px 20px;
+            z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+        .phase-display .current-phase {
+            background: rgba(255,255,255,0.2);
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 16px;
+            text-transform: uppercase;
+            display: inline-block;
+            margin-right: 15px;
+        }
+        .phase-display .phase-timer {
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            font-size: 14px;
+            background: rgba(255,255,255,0.1);
+            padding: 4px 12px;
+            border-radius: 15px;
+            display: inline-block;
+        }
+        body { padding-top: 50px; } /* Add space for fixed phase display */
+    </style>
+
+    <script>
+        let socket = null;
+        let participant = null;
+        let gameData = null;
+        let sessionId = null;
+
+
+        // Test backend connection
+        async function testBackend() {
+            try {
+                const response = await fetch('http://localhost:3001/api/health');
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    updateStatus('backendStatus', 'connected', 'Connected');
+                    initializeSocket();
+                } else {
+                    updateStatus('backendStatus', 'disconnected', 'Error');
+                }
+            } catch (error) {
+                console.error('Backend connection failed:', error);
+                updateStatus('backendStatus', 'disconnected', 'Disconnected');
+            }
+        }
+
+        function updateStatus(elementId, status, text) {
+            // For the new compact status display
+            if (elementId === 'backendStatus' || elementId === 'backendText') {
+                const textElement = document.getElementById('backendText');
+                const dot = document.querySelector('#backendText').parentElement.previousElementSibling;
+                if (textElement) textElement.textContent = text;
+                if (dot) dot.className = `dot ${status}`;
+            } else if (elementId === 'socketStatus' || elementId === 'socketText') {
+                const textElement = document.getElementById('socketText');
+                const dot = document.querySelector('#socketText').parentElement.previousElementSibling;
+                if (textElement) textElement.textContent = text;
+                if (dot) dot.className = `dot ${status}`;
+            }
+        }
+
+        function initializeSocket() {
+            console.log('🔌 Initializing WebSocket connection...');
+            
+            // Get browser type
+            const browserType = detectBrowser();
+            
+            // Edge-specific connection options
+            const connectionOptions = {
+                timeout: 20000,
+                forceNew: true
+            };
+            
+            // Edge needs different connection settings
+            if (browserType === 'edge') {
+                connectionOptions.transports = ['websocket', 'polling'];
+                connectionOptions.upgrade = true;
+                connectionOptions.rememberUpgrade = false;
+            }
+            
+            socket = io('http://localhost:3001', connectionOptions);
+            
+            socket.on('connect', () => {
+                console.log('✅ Connected to backend via WebSocket');
+                updateStatus('socketStatus', 'connected', 'Connected');
+                document.getElementById('wsStatus').textContent = 'Connected';
+                document.getElementById('connectionTime').textContent = new Date().toLocaleTimeString();
+                
+                // Don't auto-join - wait for user to enter lobby and join manually
+                console.log('🎮 Connected and ready to join game');
+            });
+
+            socket.on('gameStateUpdate', (game) => {
+                console.log('📊 Game state updated:', game);
+                console.log('📊 Previous phase:', gameData?.phase, 'New phase:', game.phase);
+                
+                // Debug company data in the update
+                if (game.companies) {
+                    console.log('🔍 Companies in game state update:', game.companies.map(c => ({
+                        id: c.id,
+                        name: c.name,
+                        totalSharesAllocated: c.totalSharesAllocated,
+                        shares: c.shares,
+                        ceoId: c.ceoId,
+                        ipoPrice: c.ipoPrice,
+                        currentPrice: c.currentPrice
+                    })));
+                    
+                    // Check for companies with 0 totalSharesAllocated
+                    const problematicCompanies = game.companies.filter(c => c.totalSharesAllocated === 0);
+                    if (problematicCompanies.length > 0) {
+                        console.log('⚠️ Companies with 0 totalSharesAllocated:', problematicCompanies.map(c => c.name));
+                        
+                        // CLIENT-SIDE FIX: If we're in trading phase and companies have 0 totalSharesAllocated,
+                        // but we have ledger data showing stock values, they must have sold their shares
+                        if (game.phase === 'trading' || game.phase === 'newspaper') {
+                            problematicCompanies.forEach(company => {
+                                // Check if any participants have shares of this company in their ledger
+                                if (window.ledgerData && window.ledgerData.ledgers) {
+                                    console.log(`🔍 Checking ledger data for ${company.name}:`, window.ledgerData.ledgers.map(l => ({
+                                        participantId: l.participantId,
+                                        shares: l.shares,
+                                        companyShares: l.shares ? l.shares[company.id] : 0
+                                    })));
+                                    
+                                    const hasShares = window.ledgerData.ledgers.some(ledger => 
+                                        ledger.shares && ledger.shares[company.id] > 0
+                                    );
+                                    
+                                    if (hasShares) {
+                                        console.log(`🔧 Client-side fix: ${company.name} has participants with shares but 0 totalSharesAllocated - fixing to ${company.shares}`);
+                                        company.totalSharesAllocated = company.shares;
+                                    } else {
+                                        console.log(`❌ No shares found in ledger for ${company.name}`);
+                                    }
+                                } else {
+                                    console.log(`❌ No ledger data available for ${company.name}`);
+                                }
+                            });
+                        }
+                    }
+                }
+                
+                gameData = game;
+                
+                // Reset game starting flag when we receive a game state update
+                // But only if we're in a stable phase (not during transitions)
+                if (game.phase === 'ipo' || game.phase === 'trading' || game.phase === 'newspaper') {
+                    isGameStarting = false;
+                    console.log('🔄 Game starting flag reset - game reached stable phase:', game.phase);
+                }
+                
+                // Reset manual navigation when server changes phase (but respect display mode)
+                if (game.phase === 'trading' || game.phase === 'newspaper') {
+                    console.log('🔄 Server changed phase to', game.phase, '- checking display mode:', currentDisplayMode);
+                    // Only reset if we're in auto mode, otherwise keep current display
+                    if (currentDisplayMode === 'auto') {
+                        manualNavigation = false;
+                    }
+                }
+                
+                updateGameDisplay();
+                reflectLivePrices();
+                
+                // Browser-specific: Force IPO interface update
+                if ((browser === 'chrome' || browser === 'edge') && game.phase === 'ipo') {
+                    console.log(`🔄 ${browser}: Forcing IPO interface update...`);
+                    setTimeout(() => {
+                        updateIPOBiddingInterface();
+                        // Edge needs extra force for IPO interface
+                        if (browser === 'edge') {
+                            document.getElementById('ipoInterface').style.display = 'block';
+                            console.log('🔧 Edge: Forced IPO interface display');
+                        }
+                    }, browser === 'edge' ? 1500 : 500);
+                }
+            });
+
+            // Listen for executed trades to push to ticker
+            console.log('🔧 Setting up tradesExecuted event listener on client');
+            socket.on('tradesExecuted', (data) => {
+                console.log('📨 Client received tradesExecuted event:', data);
+                try {
+                    if (!data || !data.trades || !Array.isArray(data.trades)) {
+                        console.log('❌ Invalid tradesExecuted data:', data);
+                        return;
+                    }
+                    
+                    console.log(`📊 Processing ${data.trades.length} trades on client side`);
+                    
+                    // Update portfolio after trades are executed
+                    setTimeout(() => {
+                        console.log('🔄 Updating portfolio after trades...');
+                        console.log('🔍 Current gameData before update:', gameData);
+                        
+                        // Refresh ledger data to get updated cash/shares
+                        console.log('🔄 Refreshing ledger data after trade...');
+                        fetchLedgerData().then(() => {
+                            console.log('✅ Ledger data refreshed after trade');
+                            updateYourPortfolio();
+                            updateParticipantsDisplay();
+                            updateCompanyPrices(data.trades);
+                            console.log('🔍 Current gameData after update:', gameData);
+                        });
+                    }, 500);
+                    
+                    const ticker = document.getElementById('tickerContent');
+                    const tape = document.getElementById('tickerTape');
+                    if (!ticker || !tape) return;
+                    const fragments = data.trades.map(t => {
+                        const c = (gameData?.companies||[]).find(x => x.id === t.companyId);
+                        const sym = c?.symbol || c?.name || t.companyId;
+                        return `${sym} ${t.shares} @ $${Number(t.price).toFixed(2)}`;
+                    });
+                    if (fragments.length) {
+                        ticker.textContent = `  •  ${fragments.join('   •   ')}  •  ` + ticker.textContent;
+                        tape.style.display = 'block';
+                    }
+                    
+                    // Update portfolio after trades are executed
+                    setTimeout(() => {
+                        updateYourPortfolio();
+                        updateParticipantsDisplay();
+                    }, 500);
+                } catch (e) { console.warn('ticker error', e); }
+            });
+
+            socket.on('participantUpdate', (participantData) => {
+                console.log('👤 Participant updated:', participantData);
+                participant = participantData;
+                updateParticipantDisplay();
+            });
+
+            socket.on('disconnect', () => {
+                console.log('❌ Disconnected from backend');
+                updateStatus('socketStatus', 'disconnected', 'Disconnected');
+                document.getElementById('wsStatus').textContent = 'Disconnected';
+            });
+
+            socket.on('connect_error', (error) => {
+                console.error('❌ Socket connection error:', error);
+                updateStatus('socketStatus', 'disconnected', 'Connection Error');
+                document.getElementById('wsStatus').textContent = 'Connection Error';
+                
+                // Browser-specific retry logic
+                const browserType = detectBrowser();
+                if (browserType === 'chrome' || browserType === 'edge') {
+                    console.log(`🔄 ${browserType} detected - retrying connection in 3 seconds...`);
+                    setTimeout(() => {
+                        if (!socket.connected) {
+                            console.log('🔄 Retrying WebSocket connection...');
+                            socket.connect();
+                        }
+                    }, 3000);
+                }
+            });
+
+            socket.on('ipoBidsReceived', (data) => {
+                console.log('✅ IPO bids received:', data);
+                console.log('📝 IPO bids submitted successfully - processing AI bids...');
+                
+                // Show visual indicator that IPO is processing
+                const submitButton = document.getElementById('submitBidsButton');
+                if (submitButton) {
+                    submitButton.textContent = '🔄 Processing IPO...';
+                    submitButton.disabled = true;
+                }
+                
+                // Wait a moment for the server to process and update game state
+                setTimeout(() => {
+                    console.log('🔄 Checking for game state update after IPO...');
+                    // The server should emit a gameStateUpdate event with the new phase
+                }, 1000);
+            });
+
+            socket.on('ipoSkipped', (data) => {
+                console.log('⏭️ IPO skipped:', data);
+                console.log('📝 IPO skipped - watching AI bots bid automatically');
+            });
+
+            socket.on('tradingOrderReceived', (data) => {
+                console.log('✅ Trading order received:', data);
+                alert(`Order submitted successfully! Order ID: ${data.orderId}`);
+            });
+
+            socket.on('orderSuccess', (data) => {
+                console.log('✅ Order executed successfully:', data);
+                // Update portfolio after successful trade
+                setTimeout(() => {
+                    updateYourPortfolio();
+                    updateParticipantsDisplay();
+                }, 500);
+            });
+
+            socket.on('orderError', (data) => {
+                console.error('❌ Order error:', data);
+                alert(`Order failed: ${data.message}`);
+            });
+
+
+            socket.on('marketDataUpdate', (data) => {
+                console.log('📊 Market data updated:', data);
+                updateMarketData(data);
+            });
+
+            socket.on('error', (error) => {
+                console.error('❌ Socket error:', error);
+            });
+
+            socket.on('gameAlreadyStarted', (data) => {
+                console.log('⚠️ Game already started:', data);
+                // Don't revert the interface - keep it in current state
+            });
+        }
+
+        function updateMarketData(marketData) {
+            if (!marketData) return;
+            
+            console.log('📊 Updating market data:', marketData);
+            
+            // Update current prices in the display
+            if (marketData.currentPrice) {
+                const priceElement = document.getElementById(`price_${marketData.companyId}`);
+                if (priceElement) {
+                    priceElement.textContent = `$${marketData.currentPrice.toFixed(2)}`;
+                }
+            }
+            
+            // Update order book if available
+            if (marketData.buyOrders && marketData.sellOrders) {
+                console.log(`📈 ${marketData.companyId}: Buy orders: ${marketData.buyOrders.length}, Sell orders: ${marketData.sellOrders.length}`);
+            }
+        }
+
+        async function fetchLedgerData(retryCount = 0) {
+            try {
+                const ledgerResponse = await fetch(`http://localhost:3001/api/ledger?session=${sessionId}&fresh=true&cb=${Date.now()}`);
+                if (ledgerResponse.ok) {
+                    window.ledgerData = await ledgerResponse.json();
+                    console.log('📊 Ledger data loaded:', window.ledgerData);
+                    
+                    // Check if ledger data is complete (has ledgers with proper net worth)
+                    if (window.ledgerData && window.ledgerData.ledgers) {
+                        const hasCompleteData = Object.values(window.ledgerData.ledgers).some(ledger => 
+                            ledger.totalNetWorth && ledger.totalNetWorth > 0
+                        );
+                        
+                        if (hasCompleteData) {
+                            console.log('✅ Ledger data is complete');
+                            return true;
+                        } else if (retryCount < 3) {
+                            console.log(`🔄 Ledger data incomplete, retrying... (${retryCount + 1}/3)`);
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+                            return await fetchLedgerData(retryCount + 1);
+                        }
+                    }
+                    
+                    return true;
+                } else {
+                    console.log('📊 Ledger data not available yet');
+                    window.ledgerData = null;
+                    return false;
+                }
+            } catch (ledgerError) {
+                console.log('📊 Ledger data not available yet:', ledgerError.message);
+                window.ledgerData = null;
+                return false;
+            }
+        }
+
+        // Automatic refresh loop to simulate manual clicking
+        let refreshLoopActive = false;
+        let refreshLoopCount = 0;
+        
+        async function startAutomaticRefreshLoop() {
+            if (refreshLoopActive) return; // Prevent multiple loops
+            
+            refreshLoopActive = true;
+            refreshLoopCount = 0;
+            console.log('🔄 Starting automatic refresh loop...');
+            
+            const refreshInterval = setInterval(async () => {
+                refreshLoopCount++;
+                console.log(`🔄 Auto-refresh cycle ${refreshLoopCount}...`);
+                
+                // Fetch fresh ledger data
+                await fetchLedgerData();
+                
+                // Force update all displays
+                updateParticipantsDisplay();
+                
+                // Only update portfolio if not in trading phase or if trading interface doesn't exist
+                const tradingContent = document.getElementById('tradingInterfaceContent');
+                const isInTradingPhase = gameData?.phase === 'trading';
+                const tradingInterfaceExists = tradingContent && tradingContent.innerHTML.trim() !== '';
+                
+                if (!isInTradingPhase || !tradingInterfaceExists) {
+                    updateYourPortfolio();
+                } else {
+                    console.log('🔍 Skipping portfolio update to preserve trading interface input values');
+                }
+                
+                updateCompaniesDisplay();
+                
+                // Check if we have complete data or reached max cycles
+                const hasCompleteData = window.ledgerData && window.ledgerData.ledgers && 
+                    Array.isArray(window.ledgerData.ledgers) && window.ledgerData.ledgers.some(ledger => 
+                        ledger.totalNetWorth && ledger.totalNetWorth > 0
+                    );
+                
+                if (hasCompleteData || refreshLoopCount >= 3) {
+                    clearInterval(refreshInterval);
+                    refreshLoopActive = false;
+                    if (hasCompleteData) {
+                        console.log('✅ Automatic refresh loop completed - data is now complete!');
+                    } else {
+                        console.log('⏰ Automatic refresh loop timed out after 10 cycles');
+                    }
+                }
+            }, 800); // Refresh every 800ms (faster than manual clicking)
+        }
+
+        function updateGameDisplay() {
+            if (gameData) {
+                console.log('🔄 updateGameDisplay called, phase:', gameData.phase);
+                document.getElementById('gameDataContent').textContent = JSON.stringify(gameData, null, 2);
+                
+                // Update game phase
+                document.getElementById('phaseText').textContent = gameData.phase;
+                document.getElementById('gamePhase').style.display = 'block';
+                
+                // Update phase display
+                updatePhaseDisplay(gameData.phase);
+                
+                // Fetch ledger data if entering IPO phase or later
+                if ((gameData.phase === 'ipo' || gameData.phase === 'newspaper' || gameData.phase === 'trading') && !window.ledgerData) {
+                    console.log('🔄 Fetching ledger data for phase:', gameData.phase);
+                    fetchLedgerData();
+                }
+                
+                // Special handling for phase transitions to ensure complete ledger data
+                if (gameData.phase === 'newspaper' || gameData.phase === 'trading') {
+                    console.log('🔄 Phase transition detected, ensuring complete ledger data...');
+                    // Start automatic refresh loop to simulate manual clicking
+                    startAutomaticRefreshLoop();
+                }
+                
+                // Update phase-specific content
+                updatePhaseContent();
+                
+                // Only update displays for phases that need them
+                if (gameData.phase === 'trading' || gameData.phase === 'newspaper') {
+                // Update companies display
+                updateCompaniesDisplay();
+                
+                // Update participants display
+                updateParticipantsDisplay();
+                }
+                
+                // Update participant display (show/hide start button)
+                updateParticipantDisplay();
+            }
+        }
+
+        // Track manual navigation to prevent automatic phase switching
+        let manualNavigation = false;
+        let currentDisplayMode = 'auto'; // 'auto', 'trading', 'fullscreen'
+        
+        // Newspaper timer variables
+        let newspaperTimer = null;
+        let newspaperTimeLeft = 15;
+        
+        function resetDisplayMode() {
+            console.log('🔄 Resetting display mode to auto');
+            currentDisplayMode = 'auto';
+            manualNavigation = false;
+        }
+        
+        // Newspaper timer functions
+        function startNewspaperTimer() {
+            console.log('⏰ Starting newspaper phase timer (15 seconds)');
+            newspaperTimeLeft = 15;
+            
+            // Clear any existing timer
+            if (newspaperTimer) {
+                clearInterval(newspaperTimer);
+            }
+            
+            // Update the timer display immediately
+            updateNewspaperTimerDisplay();
+            
+            // Start countdown
+            newspaperTimer = setInterval(() => {
+                newspaperTimeLeft--;
+                updateNewspaperTimerDisplay();
+                
+                if (newspaperTimeLeft <= 0) {
+                    console.log('⏰ Newspaper timer expired - advancing to trading phase');
+                    clearInterval(newspaperTimer);
+                    newspaperTimer = null;
+                    readyForNextPhase();
+                }
+            }, 1000);
+        }
+        
+        function updateNewspaperTimerDisplay() {
+            const timerElement = document.getElementById('newspaperTimer');
+            if (timerElement) {
+                try {
+                    if (newspaperTimeLeft > 0) {
+                        timerElement.innerHTML = `
+                            <div style="background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%); color: white; padding: 15px; border-radius: 10px; margin: 20px 0; text-align: center; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);">
+                                <h3 style="margin: 0 0 10px 0; font-size: 1.5em;">⏰ Trading Phase Starting Soon</h3>
+                                <p style="margin: 0 0 15px 0; font-size: 1.2em;">Trading will begin in <strong style="font-size: 1.5em; color: #fef3c7;">${newspaperTimeLeft}</strong> seconds</p>
+                                <button onclick="skipNewspaperTimer()" style="background: #059669; color: white; padding: 12px 24px; font-size: 16px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; margin-right: 10px;">🚀 Start Trading Now</button>
+                                <button onclick="pauseNewspaperTimer()" style="background: #6b7280; color: white; padding: 12px 24px; font-size: 16px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer;">⏸️ Pause Timer</button>
+                            </div>
+                        `;
+                    } else {
+                        timerElement.innerHTML = `
+                            <div style="background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: white; padding: 15px; border-radius: 10px; margin: 20px 0; text-align: center; box-shadow: 0 4px 15px rgba(5, 150, 105, 0.3);">
+                                <h3 style="margin: 0 0 10px 0; font-size: 1.5em;">🚀 Trading Phase Starting!</h3>
+                                <p style="margin: 0; font-size: 1.2em;">Preparing trading interface...</p>
+                            </div>
+                        `;
+                    }
+                } catch (error) {
+                    console.error('❌ Error updating timer display:', error);
+                }
+            } else {
+                console.log('⚠️ Timer element not found, waiting for newspaper to load...');
+            }
+        }
+        
+        function skipNewspaperTimer() {
+            console.log('🚀 User skipped newspaper timer - advancing to trading phase');
+            if (newspaperTimer) {
+                clearInterval(newspaperTimer);
+                newspaperTimer = null;
+            }
+            readyForNextPhase();
+        }
+        
+        function pauseNewspaperTimer() {
+            console.log('⏸️ User paused newspaper timer');
+            if (newspaperTimer) {
+                clearInterval(newspaperTimer);
+                newspaperTimer = null;
+            }
+            // Update display to show paused state
+            const timerElement = document.getElementById('newspaperTimer');
+            if (timerElement) {
+                timerElement.innerHTML = `
+                    <div style="background: linear-gradient(135deg, #6b7280 0%, #9ca3af 100%); color: white; padding: 15px; border-radius: 10px; margin: 20px 0; text-align: center; box-shadow: 0 4px 15px rgba(107, 114, 128, 0.3);">
+                        <h3 style="margin: 0 0 10px 0; font-size: 1.5em;">⏸️ Timer Paused</h3>
+                        <p style="margin: 0 0 15px 0; font-size: 1.2em;">Take your time to review the IPO results</p>
+                        <button onclick="startNewspaperTimer()" style="background: #f59e0b; color: white; padding: 12px 24px; font-size: 16px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; margin-right: 10px;">▶️ Resume Timer</button>
+                        <button onclick="readyForNextPhase()" style="background: #059669; color: white; padding: 12px 24px; font-size: 16px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer;">🚀 Start Trading Now</button>
+                    </div>
+                `;
+            }
+        }
+
+        function updatePhaseContent() {
+            const phaseContent = document.getElementById('phaseContent');
+            const phase = gameData.phase;
+            console.log('🔄 updatePhaseContent called, phase:', phase, 'manualNavigation:', manualNavigation, 'currentDisplayMode:', currentDisplayMode);
+            
+            // Only auto-switch interfaces if not manually navigating
+            if (!manualNavigation && currentDisplayMode === 'auto') {
+            switch(phase) {
+                case 'lobby':
+                    resetDisplayMode(); // Reset to auto mode for lobby
+                    phaseContent.innerHTML = `
+                        <p>Waiting for players to join...</p>
+                        <p>Click "Start IPO Bidding" when ready to begin the IPO process!</p>
+                    `;
+                    document.getElementById('ipoInterface').style.display = 'none';
+                        document.getElementById('newspaperDisplay').style.display = 'none';
+                        document.getElementById('mainGameDisplay').style.display = 'none';
+                    document.getElementById('forceIPOButton').style.display = 'none';
+                    break;
+                case 'ipo':
+                        console.log('🎯 IPO case triggered - setting up IPO interface');
+                    // Replace the phase text with IPO BIDDING on the same line
+                    document.getElementById('phaseText').textContent = '🎯 IPO BIDDING';
+                    phaseContent.innerHTML = `
+                        <p>🎯 IPO Phase: Submit your bids!</p>
+                        <p>Place your bids for company shares. AI bots will wait for your input.</p>
+                    `;
+                        // Hide other interfaces
+                        document.getElementById('newspaperDisplay').style.display = 'none';
+                        document.getElementById('mainGameDisplay').style.display = 'none';
+                        
+                    // Show IPO bidding interface
+                        console.log('🎯 Showing IPO interface...');
+                    document.getElementById('ipoInterface').style.display = 'block';
+                    updateIPOBiddingInterface();
+                        console.log('🎯 IPO interface should be visible now');
+                        
+                        // Force the interface to stay visible with a delay
+                        setTimeout(() => {
+                            const ipoInterface = document.getElementById('ipoInterface');
+                            if (ipoInterface) {
+                                ipoInterface.style.display = 'block';
+                                console.log('🔧 Forced IPO interface to stay visible');
+                            }
+                        }, 100);
+                    
+                    // Edge-specific: Extra force for IPO interface
+                    if (browser === 'edge') {
+                        console.log('🔧 Edge: Applying extra IPO interface fixes...');
+                        setTimeout(() => {
+                            document.getElementById('ipoInterface').style.display = 'block';
+                            updateIPOBiddingInterface();
+                            console.log('🔧 Edge: IPO interface forced again');
+                        }, 2000);
+                    }
+                    
+                    // Show browser force button if needed
+                    if (browser === 'chrome' || browser === 'edge') {
+                        document.getElementById('forceIPOButton').style.display = 'inline-block';
+                        document.getElementById('forceIPOButton').textContent = `Force IPO Interface (${browser} Fix)`;
+                    }
+                    break;
+                case 'newspaper':
+                    // Show the actual newspaper display with IPO results and CEO announcements
+                    document.getElementById('newspaperDisplay').style.display = 'block';
+                    document.getElementById('mainGameDisplay').style.display = 'none';
+                    document.getElementById('ipoInterface').style.display = 'none';
+                    document.getElementById('forceIPOButton').style.display = 'none';
+                    // Hide all other ready buttons - only show the newspaper ready button
+                    document.getElementById('mainGameReadyButton').style.display = 'none';
+                    document.getElementById('readyButton').style.display = 'none';
+                    updateNewspaperDisplay();
+                    
+                    // TODO: Add timer back later - temporarily disabled to fix crash
+                    // startNewspaperTimer();
+                    break;
+                case 'trading':
+                    console.log('📈 Trading phase activated - showing main game display');
+                    // Show the main game display (1/3 1/3 1/3 layout) for trading
+                    document.getElementById('mainGameDisplay').style.display = 'block';
+                    document.getElementById('newspaperDisplay').style.display = 'none';
+                    document.getElementById('ipoInterface').style.display = 'none';
+                    document.getElementById('forceIPOButton').style.display = 'none';
+                    // Hide ready buttons during trading - show trading controls instead
+                    document.getElementById('mainGameReadyButton').style.display = 'none';
+                    document.getElementById('readyButton').style.display = 'none';
+                    
+                    // Only build the trading interface if it doesn't exist
+                    const tradingContent = document.getElementById('tradingInterfaceContent');
+                    if (!tradingContent || tradingContent.innerHTML.trim() === '') {
+                        buildTradingInterfaceInDisplay();
+                        console.log('📈 Trading interface built for first time');
+                    } else {
+                        console.log('📈 Trading interface already exists, preserving input values');
+                    }
+                    break;
+                case 'management':
+                    phaseContent.innerHTML = `
+                        <p>🏢 Management Phase: CEOs manage their companies!</p>
+                        <p>Set prices, quality, and marketing strategies.</p>
+                        <p>Management interface coming soon!</p>
+                    `;
+                    document.getElementById('companyManagement').style.display = 'block';
+                    document.getElementById('ipoInterface').style.display = 'none';
+                    document.getElementById('forceIPOButton').style.display = 'none';
+                    break;
+            }
+            }
+        }
+
+        function updateCompaniesDisplay() {
+            console.log('🔍 updateCompaniesDisplay() called');
+            // Try to find companies and participants in different possible locations
+            let companies = null;
+            if (gameData?.companies) {
+                companies = gameData.companies;
+            } else if (gameData?.currentGame?.companies) {
+                companies = gameData.currentGame.companies;
+            }
+            
+            let participants = null;
+            if (gameData?.participants) {
+                participants = gameData.participants;
+            } else if (gameData?.currentGame?.participants) {
+                participants = gameData.currentGame.participants;
+            }
+            
+            if (companies) {
+                const companiesList = document.getElementById('companiesList');
+                companiesList.innerHTML = companies.map(company => {
+                    const allocatedShares = company.totalSharesAllocated || 0;
+                    const availableShares = company.shares - allocatedShares;
+                    const finalPrice = company.ipoPrice || company.finalPrice || 0;
+                    
+                    // Get ownership breakdown for this company
+                    let ownershipHTML = '';
+                    if (participants) {
+                        const companyOwners = participants.filter(p => p.shares && p.shares[company.id] > 0);
+                        companyOwners.sort((a, b) => (b.shares[company.id] || 0) - (a.shares[company.id] || 0));
+                        
+                        if (companyOwners.length > 0) {
+                            ownershipHTML = '<div style="margin-top: 10px;"><h5>Share Ownership:</h5><ul style="margin: 5px 0; padding-left: 20px;">';
+                            companyOwners.forEach(participant => {
+                                const shares = participant.shares[company.id] || 0;
+                                const percentage = (shares / company.shares) * 100;
+                                const value = shares * finalPrice;
+                                const isCEO = percentage >= 35;
+                                
+                                ownershipHTML += `<li><strong>${participant.name}:</strong> ${shares} shares @ $${finalPrice.toFixed(2)} (${percentage.toFixed(1)}%) = $${value.toFixed(2)}`;
+                                if (isCEO) {
+                                    ownershipHTML += ' <span style="color: #dc2626; font-weight: bold;">[CEO]</span>';
+                                }
+                                ownershipHTML += '</li>';
+                            });
+                            ownershipHTML += '</ul></div>';
+                        }
+                    }
+                    
+                    // Find CEO name
+                    const ceoName = company.ceoId ? gameData.participants?.find(p => p.id === company.ceoId)?.name || 'Assigned' : 'None';
+                    
+                    return `
+                    <div style="border: 1px solid #e5e7eb; padding: 12px; margin: 8px 0; border-radius: 8px; background: #f9fafb;">
+                        <h4 style="margin: 0 0 8px 0;">${company.name}</h4>
+                        <p style="margin: 4px 0; font-size: 1.1em; font-weight: bold; color: #059669;"><strong>Current Price:</strong> $${finalPrice.toFixed(2)}</p>
+                        <p style="margin: 4px 0;"><strong>Shares Outstanding:</strong> ${allocatedShares}/${company.shares}</p>
+                        <p style="margin: 4px 0;"><strong>CEO:</strong> ${ceoName}</p>
+                    </div>
+                    `;
+                }).join('');
+                document.getElementById('mainGameDisplay').style.display = 'block';
+            }
+        }
+
+        // Build tabs for trading interface (top-level 3-4 companies)
+        function buildTradingTabs() {
+            // Trading tabs removed - using column layout instead
+            console.log('📈 Trading tabs removed - using column layout');
+        }
+
+        function buildCompanyPanels() {
+            if (!gameData || !gameData.companies) return;
+            const panels = document.getElementById('companyPanels');
+            if (!panels) return;
+            panels.innerHTML = '';
+            
+            // Find human player to check holdings
+            const humanPlayer = gameData.participants?.find(p => p.isHuman);
+            
+            panels.innerHTML = `
+                <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e5e7eb;">
+                    <h3 style="margin-top: 0; color: #1f2937;">Trading Interface</h3>
+                    <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 15px; margin-top: 20px;">
+                        <div style="font-weight: bold; padding: 12px; background: #f3f4f6; border-radius: 6px; text-align: center;">Company</div>
+                        <div style="font-weight: bold; padding: 12px; background: #f3f4f6; border-radius: 6px; text-align: center;">Buy/Sell</div>
+                        <div style="font-weight: bold; padding: 12px; background: #f3f4f6; border-radius: 6px; text-align: center;">Shares</div>
+                        <div style="font-weight: bold; padding: 12px; background: #f3f4f6; border-radius: 6px; text-align: center;">Price/Market</div>
+                        
+                        ${gameData.companies.map((company, index) => {
+                            const sharesOwned = humanPlayer?.shares?.[company.id] || 0;
+                            const currentPrice = company.currentPrice || company.ipoPrice || company.finalPrice || 0;
+                            const canSell = sharesOwned > 0;
+                            
+                            return `
+                                <div style="padding: 12px; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center;">
+                                    <div>
+                                        <strong>${company.name}</strong><br>
+                                        <small style="color: #6b7280;">$${currentPrice.toFixed(2)}</small>
+                                    </div>
+                                </div>
+                                
+                                <div style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">
+                                    <div style="display: flex; gap: 5px; justify-content: center;">
+                                        <button onclick="setOrderAction('${company.id}', 'buy')" 
+                                                id="buy_btn_${company.id}"
+                                                style="background: #059669; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                                            BUY
+                                        </button>
+                                        <button onclick="setOrderAction('${company.id}', 'sell')" 
+                                                id="sell_btn_${company.id}"
+                                                style="background: ${canSell ? '#dc2626' : '#9ca3af'}; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: ${canSell ? 'pointer' : 'not-allowed'}; font-weight: bold;"
+                                                ${!canSell ? 'disabled' : ''}>
+                                            SELL
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">
+                                    <input type="number" id="shares_${company.id}" min="1" max="${canSell ? sharesOwned : 999999}" 
+                                           placeholder="Shares" style="width: 120px; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; text-align: center;">
+                                    ${canSell ? `<small style="color: #6b7280;">Max: ${sharesOwned}</small>` : ''}
+                                </div>
+                                
+                                <div style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">
+                                    <div style="display: flex; gap: 5px;">
+                                        <input type="number" id="price_${company.id}" step="0.01" placeholder="Market" 
+                                               style="flex: 1; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; text-align: center;">
+                                        <button onclick="setMarketPrice('${company.id}')" 
+                                                style="background: #3b82f6; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 0.9em;">
+                                            Market
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                    
+                    <div style="margin-top: 20px; text-align: center;">
+                        <button onclick="submitTradingOrder()" 
+                                style="background: #1f2937; color: white; border: none; padding: 15px 30px; border-radius: 8px; cursor: pointer; font-size: 1.1em; font-weight: bold;">
+                            Submit Order
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            // Set default to BUY for first company
+            if (gameData.companies.length > 0) {
+                setOrderAction(gameData.companies[0].id, 'buy');
+            }
+            
+            console.log('📈 Trading interface built with column layout');
+        }
+
+        function showCEOControls(companyId) {
+            console.log('🔍 showCEOControls called for company:', companyId);
+            alert(`CEO Controls for Company ${companyId}\n\nThis feature is coming soon! You can manage your company's operations here.`);
+        }
+
+        function buildTradingInterfaceInDisplay() {
+            console.log('🔍 buildTradingInterfaceInDisplay() called');
+            console.log('🔍 Stack trace:', new Error().stack);
+            console.log('🔍 gameData:', gameData);
+            console.log('🔍 gameData.companies:', gameData?.companies);
+            console.log('🔍 gameData.currentGame?.companies:', gameData?.currentGame?.companies);
+            
+            // Try to find companies in different possible locations
+            let companies = null;
+            if (gameData?.companies) {
+                companies = gameData.companies;
+                console.log('🔍 Found companies in gameData.companies');
+            } else if (gameData?.currentGame?.companies) {
+                companies = gameData.currentGame.companies;
+                console.log('🔍 Found companies in gameData.currentGame.companies');
+            } else if (gameData?.currentGame && Array.isArray(gameData.currentGame)) {
+                // Sometimes currentGame is an array of companies
+                companies = gameData.currentGame;
+                console.log('🔍 Found companies in gameData.currentGame (array)');
+            }
+            
+            if (!companies || !Array.isArray(companies)) {
+                console.log('❌ No companies found in any expected location');
+                console.log('🔍 Available gameData keys:', Object.keys(gameData || {}));
+                return;
+            }
+            
+            const tradingContent = document.getElementById('tradingInterfaceContent');
+            console.log('🔍 tradingContent element:', tradingContent);
+            
+            if (!tradingContent) {
+                console.log('❌ tradingInterfaceContent element not found');
+                return;
+            }
+            
+            // Find human player to check holdings
+            let participants = null;
+            if (gameData?.participants) {
+                participants = gameData.participants;
+            } else if (gameData?.currentGame?.participants) {
+                participants = gameData.currentGame.participants;
+            }
+            const humanPlayer = participants?.find(p => p.isHuman);
+            
+            console.log('🔍 Building trading interface HTML for', companies.length, 'companies');
+            tradingContent.innerHTML = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-top: 15px;">
+                    <div style="font-weight: bold; padding: 6px; background: #f3f4f6; border-radius: 4px; text-align: center; font-size: 0.8em;">Company</div>
+                    <div style="font-weight: bold; padding: 6px; background: #f3f4f6; border-radius: 4px; text-align: center; font-size: 0.8em;">Buy/Sell</div>
+                    <div style="font-weight: bold; padding: 6px; background: #f3f4f6; border-radius: 4px; text-align: center; font-size: 0.8em;">Shares</div>
+                    <div style="font-weight: bold; padding: 6px; background: #f3f4f6; border-radius: 4px; text-align: center; font-size: 0.8em;">Price</div>
+                    
+                    ${companies.map((company, index) => {
+                        const sharesOwned = humanPlayer?.shares?.[company.id] || 0;
+                        const currentPrice = company.currentPrice || company.ipoPrice || company.finalPrice || 0;
+                        const canSell = sharesOwned > 0;
+                        console.log(`🔍 Frontend: ${company.name} - sharesOwned: ${sharesOwned}, humanPlayer:`, humanPlayer);
+                        
+                        return `
+                            <div style="padding: 6px; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; font-size: 0.8em;">
+                                <strong>${company.name}</strong>
+                            </div>
+                            
+                            <div style="padding: 6px; border-bottom: 1px solid #e5e7eb; text-align: center;">
+                                <div style="display: flex; gap: 2px;">
+                                    <button id="buy_btn_display_${company.id}" onclick="toggleOrderType('${company.id}', 'buy')" 
+                                            style="flex: 1; padding: 4px; background: #059669; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.7em;">
+                                        Buy
+                                    </button>
+                                    <button id="sell_btn_display_${company.id}" onclick="toggleOrderType('${company.id}', 'sell')" 
+                                            style="flex: 1; padding: 4px; background: #dc2626; color: white; border: none; border-radius: 3px; cursor: pointer; opacity: ${canSell ? '1' : '0.5'}; font-size: 0.7em;" 
+                                            ${!canSell ? 'disabled' : ''}>
+                                        Sell
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div style="padding: 6px; border-bottom: 1px solid #e5e7eb; text-align: center;">
+                                <input type="number" id="shares_display_${company.id}" min="1" max="${canSell ? sharesOwned : 999999}" 
+                                       placeholder="Shares" style="width: 60px; padding: 4px; border: 1px solid #d1d5db; border-radius: 3px; text-align: center; font-size: 0.7em;"
+                                       oninput="console.log('🔍 INPUT EVENT: shares_display_${company.id} value changed to:', this.value)"
+                                       onchange="console.log('🔍 CHANGE EVENT: shares_display_${company.id} value changed to:', this.value)"
+                                       onfocus="console.log('🔍 FOCUS EVENT: shares_display_${company.id} focused')"
+                                       onblur="console.log('🔍 BLUR EVENT: shares_display_${company.id} blurred')">
+                                ${canSell ? `<small style="color: #6b7280; font-size: 0.6em;">Max: ${sharesOwned}</small>` : ''}
+                            </div>
+                            
+                            <div style="padding: 6px; border-bottom: 1px solid #e5e7eb; text-align: center;">
+                                <div style="display: flex; gap: 2px;">
+                                    <input type="number" id="price_display_${company.id}" step="0.01" placeholder="Market" 
+                                           style="flex: 1; padding: 4px; border: 1px solid #d1d5db; border-radius: 3px; text-align: center; font-size: 0.7em;">
+                                    <button onclick="setMarketPrice('${company.id}')" 
+                                            style="padding: 4px; background: #6b7280; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.7em;">
+                                        M
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+                
+                <div style="margin-top: 10px; text-align: center;">
+                    <button onclick="submitAllOrdersFromDisplay()" style="padding: 6px 12px; background: #059669; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8em;">Submit Orders</button>
+                </div>
+            `;
+            
+            console.log('✅ Trading interface built successfully');
+            console.log('🔍 tradingContent.innerHTML length:', tradingContent.innerHTML.length);
+        }
+        
+        // Trading interface helper functions
+        function setOrderAction(companyId, action) {
+            // Reset all buttons for this company
+            const buyBtn = document.getElementById(`buy_btn_${companyId}`);
+            const sellBtn = document.getElementById(`sell_btn_${companyId}`);
+            
+            if (buyBtn && sellBtn) {
+                if (action === 'buy') {
+                    buyBtn.style.background = '#059669';
+                    buyBtn.style.opacity = '1';
+                    sellBtn.style.background = '#9ca3af';
+                    sellBtn.style.opacity = '0.6';
+                } else {
+                    sellBtn.style.background = '#dc2626';
+                    sellBtn.style.opacity = '1';
+                    buyBtn.style.background = '#9ca3af';
+                    buyBtn.style.opacity = '0.6';
+                }
+            }
+            
+            console.log(`📈 Set order action for ${companyId}: ${action}`);
+        }
+        
+        function setMarketPrice(companyId) {
+            // Try to find companies in different possible locations
+            let companies = null;
+            if (gameData?.companies) {
+                companies = gameData.companies;
+            } else if (gameData?.currentGame?.companies) {
+                companies = gameData.currentGame.companies;
+            }
+            
+            const company = companies?.find(c => c.id === companyId);
+            if (company) {
+                const priceInput = document.getElementById(`price_display_${companyId}`);
+                if (priceInput) {
+                    const currentPrice = company.currentPrice || company.ipoPrice || company.finalPrice || 0;
+                    priceInput.value = currentPrice.toFixed(2);
+                    priceInput.placeholder = 'Market';
+                }
+            }
+        }
+        
+        function submitTradingOrder() {
+            // Find which company has an order
+            let orderFound = false;
+            
+            gameData.companies.forEach(company => {
+                const sharesInput = document.getElementById(`shares_${company.id}`);
+                const priceInput = document.getElementById(`price_${company.id}`);
+                const buyBtn = document.getElementById(`buy_btn_${company.id}`);
+                
+                if (sharesInput && sharesInput.value && parseInt(sharesInput.value) > 0) {
+                    const shares = parseInt(sharesInput.value);
+                    const price = priceInput.value ? parseFloat(priceInput.value) : null;
+                    const isBuy = buyBtn.style.background === 'rgb(5, 150, 105)'; // Check if buy button is active
+                    
+                    if (shares > 0) {
+                        console.log(`📈 Submitting order: ${isBuy ? 'BUY' : 'SELL'} ${shares} shares of ${company.name} at ${price ? '$' + price : 'market'}`);
+                        
+                        // Send order to server
+                        if (socket) {
+                            socket.emit('submitTradingOrder', {
+                                participantId: humanPlayer.id,
+                                companyId: company.id,
+                                orderType: isBuy ? 'buy' : 'sell',
+                                shares: shares,
+                                price: price || 0
+                            });
+                        }
+                        
+                        orderFound = true;
+                    }
+                }
+            });
+            
+            if (!orderFound) {
+                alert('Please enter shares for at least one company');
+            }
+        }
+
+        function selectTab(companyId) {
+            document.querySelectorAll('#companyPanels > div').forEach(div => {
+                div.style.display = div.id === `panel_${companyId}` ? 'block' : 'none';
+            });
+            document.querySelectorAll('#companyTabs .tab-button').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.companyId === companyId);
+            });
+        }
+
+        function submitOrder(companyId) {
+            if (!socket) return;
+            const side = document.getElementById(`order_side_${companyId}`).value;
+            const type = document.getElementById(`order_type_${companyId}`).value;
+            const shares = parseInt(document.getElementById(`order_shares_${companyId}`).value || '0', 10);
+            const price = parseFloat(document.getElementById(`order_price_${companyId}`).value || '0');
+            if (!shares || shares <= 0) { alert('Enter shares'); return; }
+            if (type === 'limit' && (!price || price <= 0)) { alert('Enter limit price'); return; }
+            const payload = { 
+                participantId: gameData.participants?.find(p => p.isHuman)?.id,
+                companyId, 
+                orderType: side, 
+                shares, 
+                price: type==='market' ? 0 : price 
+            };
+            socket.emit('placeOrder', payload);
+        }
+
+        function toggleOrderType(companyId, action) {
+            console.log('🔍 toggleOrderType called:', companyId, action);
+            // Reset all buttons for this company
+            const buyBtn = document.getElementById(`buy_btn_display_${companyId}`);
+            const sellBtn = document.getElementById(`sell_btn_display_${companyId}`);
+            
+            console.log('🔍 Found buttons:', { buyBtn, sellBtn });
+            
+            if (buyBtn && sellBtn) {
+                if (action === 'buy') {
+                    buyBtn.style.background = '#059669';
+                    buyBtn.style.opacity = '1';
+                    sellBtn.style.background = '#9ca3af';
+                    sellBtn.style.opacity = '0.6';
+                    console.log('✅ Set to BUY mode');
+                } else {
+                    sellBtn.style.background = '#dc2626';
+                    sellBtn.style.opacity = '1';
+                    buyBtn.style.background = '#9ca3af';
+                    buyBtn.style.opacity = '0.6';
+                    console.log('✅ Set to SELL mode');
+                }
+            } else {
+                console.log('❌ Buttons not found for company:', companyId);
+            }
+            
+            // DO NOT automatically submit orders - let user click Submit button
+            console.log('🔍 Order type set, waiting for user to click Submit Orders button');
+        }
+
+        function submitAllOrdersFromDisplay() {
+            console.log('🔍 submitAllOrdersFromDisplay called');
+            console.log('🔍 gameData:', gameData);
+            console.log('🔍 gameData.companies:', gameData?.companies);
+            console.log('🔍 gameData.currentGame.companies:', gameData?.currentGame?.companies);
+            
+            // Try to find companies in different possible locations
+            let companies = null;
+            if (gameData?.companies) {
+                companies = gameData.companies;
+                console.log('🔍 Found companies in gameData.companies');
+            } else if (gameData?.currentGame?.companies) {
+                companies = gameData.currentGame.companies;
+                console.log('🔍 Found companies in gameData.currentGame.companies');
+            } else if (gameData?.currentGame && Array.isArray(gameData.currentGame)) {
+                // Sometimes currentGame is an array of companies
+                companies = gameData.currentGame;
+                console.log('🔍 Found companies in gameData.currentGame (array)');
+            }
+            
+            if (!gameData || !companies || !Array.isArray(companies)) {
+                console.log('❌ No gameData or companies found');
+                return;
+            }
+            
+            // Find the human player
+            let participants = null;
+            if (gameData?.participants) {
+                participants = gameData.participants;
+            } else if (gameData?.currentGame?.participants) {
+                participants = gameData.currentGame.participants;
+            }
+            const humanPlayer = participants?.find(p => p.isHuman);
+            console.log('🔍 humanPlayer:', humanPlayer);
+            
+            if (!humanPlayer) {
+                console.log('❌ Human player not found');
+                alert('Human player not found');
+                return;
+            }
+            
+            // Use the participant ID from the game data (this should match the ledger)
+            const participantId = humanPlayer.id;
+            console.log(`🔍 Debug - Using participant ID from game data: ${participantId}, Name: ${humanPlayer.name}`);
+            console.log('🔍 All participants in gameData:', participants);
+            console.log('🔍 All participant IDs:', participants?.map(p => ({ id: p.id, name: p.name, isHuman: p.isHuman })));
+            
+            let orderFound = false;
+            
+            companies.forEach(company => {
+                const sharesInput = document.getElementById(`shares_display_${company.id}`);
+                const priceInput = document.getElementById(`price_display_${company.id}`);
+                const buyBtn = document.getElementById(`buy_btn_display_${company.id}`);
+                
+                if (sharesInput && sharesInput.value && parseInt(sharesInput.value) > 0) {
+                    const shares = parseInt(sharesInput.value);
+                    const price = priceInput.value ? parseFloat(priceInput.value) : null;
+                    const isBuy = buyBtn.style.background === 'rgb(5, 150, 105)'; // Check if buy button is active
+                    
+                    if (shares > 0) {
+                        const finalPrice = price || (company.currentPrice || company.ipoPrice || 1);
+                        console.log(`📈 Submitting order from display: ${isBuy ? 'BUY' : 'SELL'} ${shares} shares of ${company.name} at $${finalPrice.toFixed(2)}`);
+                        
+                        // Send order to server
+                        if (socket) {
+                            const orderData = {
+                                participantId: participantId,
+                                companyId: company.id,
+                                orderType: isBuy ? 'buy' : 'sell',
+                                shares: shares,
+                                price: price || (company.currentPrice || company.ipoPrice || 1)
+                            };
+                            console.log('📤 Sending order to server:', orderData);
+                            socket.emit('submitTradingOrder', orderData);
+                        }
+                        
+                        orderFound = true;
+                    }
+                }
+            });
+            
+            if (!orderFound) {
+                alert('Please enter shares for at least one company');
+            }
+        }
+
+        function updateNewspaperDisplay() {
+            if (!gameData) return;
+            
+            const articlesDiv = document.getElementById('newspaperArticles');
+            let articlesHTML = '';
+            
+            // Header with weather and date
+            const weather = gameData.weather || 'sunny';
+            const weatherEmoji = weather === 'sunny' ? '☀️' : weather === 'rainy' ? '🌧️' : weather === 'hot' ? '🔥' : '🌤️';
+            const weatherText = weather === 'sunny' ? 'Perfect lemonade weather!' : weather === 'rainy' ? 'Rain may affect sales' : weather === 'hot' ? 'Hot weather = high demand!' : 'Mild conditions';
+            
+            articlesHTML += `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 15px; border: 2px solid #1f2937; border-radius: 8px; background: #f8fafc;">
+                    <div>
+                        <h2 style="margin: 0; color: #1f2937; font-family: serif;">The Lemonade Stand Times</h2>
+                        <p style="margin: 5px 0 0 0; color: #6b7280; font-style: italic;">${new Date().toLocaleDateString()}</p>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 2em;">${weatherEmoji}</div>
+                        <div style="color: #1f2937; font-weight: bold;">${weatherText}</div>
+                    </div>
+                </div>
+            `;
+            
+            // Add timer display to newspaper
+            articlesHTML += `
+                <div id="newspaperTimer" style="margin-bottom: 20px;">
+                    <!-- Timer will be inserted here by updateNewspaperTimerDisplay() -->
+                </div>
+            `;
+            
+            // Stock Prices Section
+            articlesHTML += '<div style="margin-bottom: 20px; padding: 15px; border: 1px solid #d1d5db; border-radius: 6px; background: white;">';
+            articlesHTML += '<h4 style="color: #1f2937; margin-top: 0;">📊 Stock Prices</h4>';
+            if (gameData.companies) {
+                articlesHTML += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">';
+                gameData.companies.forEach(company => {
+                    const finalPrice = company.finalPrice || company.currentPrice || company.ipoPrice || 0;
+                    const allocatedShares = company.totalSharesAllocated || 0;
+                    const symbol = company.name.replace('Lemonade Stand ', 'LS');
+                    articlesHTML += `
+                        <div style="border: 1px solid #e5e7eb; padding: 10px; border-radius: 4px; background: #f9fafb;">
+                            <strong>${symbol}</strong><br>
+                            <span style="font-size: 1.2em; color: #059669;">$${finalPrice.toFixed(2)}</span><br>
+                            <small>${allocatedShares}/${company.shares} shares</small>
+                        </div>
+                    `;
+                });
+                articlesHTML += '</div>';
+            }
+            articlesHTML += '</div>';
+            
+            // IPO Results Article
+            articlesHTML += '<div style="margin-bottom: 20px; padding: 15px; border: 1px solid #d1d5db; border-radius: 6px; background: white;">';
+            articlesHTML += '<h4 style="color: #1f2937; margin-top: 0;">📈 IPO Results - All Companies Go Public</h4>';
+            if (gameData.companies) {
+                gameData.companies.forEach(company => {
+                    const finalPrice = company.finalPrice || company.currentPrice || company.ipoPrice || 0;
+                    const allocatedShares = company.totalSharesAllocated || 0;
+                    articlesHTML += `<p><strong>${company.name}:</strong> $${finalPrice.toFixed(2)} per share (${allocatedShares}/${company.shares} shares allocated)</p>`;
+                });
+            }
+            articlesHTML += '</div>';
+            
+            // CEO Announcements
+            if (gameData.participants && gameData.companies) {
+                const ceos = gameData.participants.filter(p => p.isCEO);
+                if (ceos.length > 0) {
+                    articlesHTML += '<div style="margin-bottom: 20px; padding: 15px; border: 1px solid #d1d5db; border-radius: 6px; background: white;">';
+                    articlesHTML += '<h4 style="color: #1f2937; margin-top: 0;">👑 New CEO Appointments</h4>';
+                    ceos.forEach(ceo => {
+                        const company = gameData.companies.find(c => c.id === ceo.ceoCompanyId);
+                        if (company) {
+                            const shares = ceo.shares[company.id] || 0;
+                            const percentage = (shares / company.shares) * 100;
+                            articlesHTML += `<p><strong>${ceo.name}</strong> has been appointed CEO of <strong>${company.name}</strong> with ${percentage.toFixed(1)}% ownership (${shares} shares).</p>`;
+                        }
+                    });
+                    articlesHTML += '</div>';
+                }
+            }
+            
+            // Market Commentary
+            articlesHTML += '<div style="margin-bottom: 20px; padding: 15px; border: 1px solid #d1d5db; border-radius: 6px; background: white;">';
+            articlesHTML += '<h4 style="color: #1f2937; margin-top: 0;">💭 Market Commentary</h4>';
+            articlesHTML += '<p>All four lemonade stand companies have successfully completed their initial public offerings. Trading will begin shortly with real-time price discovery based on supply and demand.</p>';
+            articlesHTML += `<p><em>Today's weather (${weatherEmoji} ${weather}) may impact consumer demand for lemonade products.</em></p>`;
+            articlesHTML += '<p><em>Investors are advised to review their portfolios and consider their trading strategies before the market opens.</em></p>';
+            articlesHTML += '</div>';
+            
+            // Update the new fancy newspaper sections
+            updateFancyNewspaper();
+            
+            // TODO: Add timer back later - temporarily disabled to fix crash
+            // if (gameData.phase === 'newspaper') {
+            //     updateNewspaperTimerDisplay();
+            // }
+        }
+
+        function updateFancyNewspaper() {
+            if (!gameData) return;
+            
+            // Update date and weather in header
+            document.getElementById('newspaperDate').textContent = new Date().toLocaleDateString();
+            const weather = gameData.weather || 'sunny';
+            const weatherEmoji = weather === 'sunny' ? '☀️' : weather === 'rainy' ? '🌧️' : weather === 'hot' ? '🔥' : '🌤️';
+            const weatherText = weather === 'sunny' ? 'Perfect lemonade weather!' : weather === 'rainy' ? 'Rain may affect sales' : weather === 'hot' ? 'Hot weather = high demand!' : 'Mild conditions';
+            document.getElementById('newspaperWeather').textContent = weatherText;
+            
+            // IPO Results Content
+            let ipoHTML = '';
+            if (gameData.companies) {
+                gameData.companies.forEach(company => {
+                    const finalPrice = company.finalPrice || company.currentPrice || company.ipoPrice || 0;
+                    const allocatedShares = company.totalSharesAllocated || 0;
+                    const percentage = (allocatedShares / company.shares) * 100;
+                    ipoHTML += `
+                        <div style="background: #f0fdf4; padding: 15px; margin: 10px 0; border-radius: 8px; border-left: 4px solid #059669;">
+                            <h4 style="margin: 0 0 8px 0; color: #059669; font-size: 1.2em;">${company.name}</h4>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <span style="font-size: 1.5em; font-weight: bold; color: #059669;">$${finalPrice.toFixed(2)}</span>
+                                    <span style="color: #6b7280; margin-left: 10px;">per share</span>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div style="font-weight: bold; color: #1f2937;">${allocatedShares}/${company.shares} shares</div>
+                                    <div style="color: #6b7280; font-size: 0.9em;">${percentage.toFixed(1)}% sold</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            document.getElementById('ipoResultsContent').innerHTML = ipoHTML;
+            
+            // CEO Appointments Content
+            let ceoHTML = '';
+            if (gameData.participants && gameData.companies) {
+                const ceos = gameData.participants.filter(p => p.isCEO);
+                if (ceos.length > 0) {
+                    ceos.forEach(ceo => {
+                        const company = gameData.companies.find(c => c.id === ceo.ceoCompanyId);
+                        if (company) {
+                            const shares = ceo.shares[company.id] || 0;
+                            const percentage = (shares / company.shares) * 100;
+                            ceoHTML += `
+                                <div style="background: #fef2f2; padding: 15px; margin: 10px 0; border-radius: 8px; border-left: 4px solid #dc2626;">
+                                    <h4 style="margin: 0 0 8px 0; color: #dc2626; font-size: 1.2em;">👑 ${ceo.name}</h4>
+                                    <p style="margin: 0; color: #1f2937;"><strong>CEO of:</strong> ${company.name}</p>
+                                    <p style="margin: 5px 0 0 0; color: #6b7280;">Ownership: ${shares} shares (${percentage.toFixed(1)}%)</p>
+                                </div>
+                            `;
+                        }
+                    });
+                } else {
+                    ceoHTML = '<p style="color: #6b7280; font-style: italic;">No CEOs appointed yet - ownership below 35% threshold</p>';
+                }
+            }
+            document.getElementById('ceoAppointmentsContent').innerHTML = ceoHTML;
+            
+            // Market Summary Content
+            let marketHTML = '';
+            if (gameData.companies) {
+                const totalShares = gameData.companies.reduce((sum, c) => sum + c.shares, 0);
+                const totalAllocated = gameData.companies.reduce((sum, c) => sum + (c.totalSharesAllocated || 0), 0);
+                const avgPrice = gameData.companies.reduce((sum, c) => sum + (c.finalPrice || c.currentPrice || c.ipoPrice || 0), 0) / gameData.companies.length;
+                const totalValue = gameData.companies.reduce((sum, c) => sum + ((c.finalPrice || c.currentPrice || c.ipoPrice || 0) * (c.totalSharesAllocated || 0)), 0);
+                
+                marketHTML = `
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div style="text-align: center; padding: 15px; background: white; border-radius: 8px;">
+                            <div style="font-size: 2em; font-weight: bold; color: #0ea5e9;">$${totalValue.toFixed(0)}</div>
+                            <div style="color: #6b7280;">Total Market Value</div>
+                        </div>
+                        <div style="text-align: center; padding: 15px; background: white; border-radius: 8px;">
+                            <div style="font-size: 2em; font-weight: bold; color: #0ea5e9;">$${avgPrice.toFixed(2)}</div>
+                            <div style="color: #6b7280;">Average Share Price</div>
+                        </div>
+                        <div style="text-align: center; padding: 15px; background: white; border-radius: 8px;">
+                            <div style="font-size: 2em; font-weight: bold; color: #0ea5e9;">${totalAllocated}</div>
+                            <div style="color: #6b7280;">Shares Sold</div>
+                        </div>
+                        <div style="text-align: center; padding: 15px; background: white; border-radius: 8px;">
+                            <div style="font-size: 2em; font-weight: bold; color: #0ea5e9;">${((totalAllocated/totalShares)*100).toFixed(1)}%</div>
+                            <div style="color: #6b7280;">Market Participation</div>
+                        </div>
+                    </div>
+                `;
+            }
+            document.getElementById('marketSummaryContent').innerHTML = marketHTML;
+            
+            // Weather & Events Content
+            let weatherHTML = `
+                <div style="display: flex; align-items: center; margin-bottom: 15px;">
+                    <div style="font-size: 3em; margin-right: 20px;">${weatherEmoji}</div>
+                    <div>
+                        <h4 style="margin: 0; color: #f59e0b;">${weatherText}</h4>
+                        <p style="margin: 5px 0 0 0; color: #6b7280;">Weather conditions will affect lemonade demand throughout the trading day.</p>
+                    </div>
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                    <h4 style="margin: 0 0 10px 0; color: #f59e0b;">📰 Market Events</h4>
+                    <p style="margin: 0; color: #1f2937;">• Historic IPO day marks the beginning of public trading</p>
+                    <p style="margin: 5px 0 0 0; color: #1f2937;">• All four companies successfully went public</p>
+                    <p style="margin: 5px 0 0 0; color: #1f2937;">• Trading begins immediately after this announcement</p>
+                </div>
+            `;
+            document.getElementById('weatherEventsContent').innerHTML = weatherHTML;
+        }
+
+        // proceedToTrading function removed - using Ready button system instead
+
+        // Ready button function for manual phase advancement
+        function readyForNextPhase() {
+            console.log('✅ User clicked Ready button - advancing to next phase');
+            console.log('🔌 Socket exists:', !!socket);
+            console.log('🔌 Socket connected:', socket ? socket.connected : 'N/A');
+            
+            if (socket && socket.connected) {
+                socket.emit('readyForNextPhase');
+                console.log('📤 readyForNextPhase event emitted to backend');
+            } else {
+                console.error('❌ Cannot advance phase - socket not connected');
+                alert('Not connected to server. Please refresh the page.');
+            }
+        }
+
+        // Manual trading control functions removed - trading is now automatic when you enter the trading phase
+
+        // Force trading function removed - using Ready button system instead
+
+        function openFullScreenDisplay() {
+            console.log('📊 Opening full screen display...');
+            manualNavigation = true; // Prevent automatic phase switching
+            currentDisplayMode = 'fullscreen'; // Set display mode
+            
+            // Show full screen display
+            document.getElementById('mainGameDisplay').style.display = 'block';
+            
+            // Force update all displays
+            setTimeout(() => {
+                updateParticipantsDisplay();
+                updateYourPortfolio();
+                updateCompaniesDisplay();
+                console.log('📊 Full screen display updated');
+            }, 100);
+        }
+
+        function updateCompanyPrices(trades) {
+            if (!trades || !Array.isArray(trades)) return;
+            
+            console.log('📈 Updating company prices after trades:', trades);
+            
+            trades.forEach(trade => {
+                if (gameData && gameData.companies) {
+                    const company = gameData.companies.find(c => c.id === trade.companyId);
+                    if (company) {
+                        // Update the current price to the trade price
+                        company.currentPrice = trade.price;
+                        console.log(`📈 Updated ${company.name} price to $${trade.price}`);
+                    }
+                }
+            });
+        }
+
+        function updateYourPortfolio() {
+            console.log('🔍 updateYourPortfolio() called');
+            console.log('🔍 gameData:', gameData);
+            console.log('🔍 gameData.participants:', gameData?.participants);
+            
+            const portfolioDiv = document.getElementById('yourPortfolio');
+            if (!portfolioDiv) {
+                console.error('❌ Portfolio div not found!');
+                return;
+            }
+            
+            // Simple portfolio display
+            const participants = gameData?.participants || [];
+            const humanPlayer = participants.find(p => p.isHuman);
+            console.log('🔍 humanPlayer:', humanPlayer);
+            
+            if (!humanPlayer) {
+                portfolioDiv.innerHTML = '<div style="background: #fef2f2; padding: 15px; border-radius: 8px; border: 1px solid #fca5a5;"><h4>No Player Data</h4><p>Please join the game first.</p></div>';
+                return;
+            }
+            
+            // Get cash and shares from human player
+            const cash = humanPlayer.remainingCapital || humanPlayer.capital || 0;
+            const shares = humanPlayer.shares || {};
+            const totalShares = Object.values(shares).reduce((sum, count) => sum + count, 0);
+            
+            // Calculate stock value
+            const companies = gameData?.companies || [];
+            let stockValue = 0;
+            companies.forEach(company => {
+                const shareCount = shares[company.id] || 0;
+                const price = company.ipoPrice || company.currentPrice || 0;
+                stockValue += shareCount * price;
+            });
+            
+            const netWorth = cash + stockValue;
+            
+            // Build simple portfolio HTML
+            let portfolioHTML = `
+                <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb;">
+                    <h4>Your Holdings - Cash: $${cash.toFixed(2)} | Net Worth: $${netWorth.toFixed(2)}</h4>
+                    <p>Total Shares: ${totalShares}</p>
+            `;
+            
+            // Show individual holdings
+            if (totalShares > 0) {
+                portfolioHTML += '<div style="margin-top: 10px;"><strong>Your Shares:</strong><br>';
+                companies.forEach(company => {
+                    const shareCount = shares[company.id] || 0;
+                    if (shareCount > 0) {
+                        const price = company.ipoPrice || company.currentPrice || 0;
+                        const value = shareCount * price;
+                        portfolioHTML += `${company.name}: ${shareCount} shares @ $${price.toFixed(2)} = $${value.toFixed(2)}<br>`;
+                    }
+                });
+                portfolioHTML += '</div>';
+            }
+            
+            portfolioHTML += '</div>';
+            portfolioDiv.innerHTML = portfolioHTML;
+            
+            console.log('✅ Portfolio updated successfully');
+        }
+
+        // updateCEOControls function moved below to avoid duplication
+
+        function updateCEOControls(player) {
+            console.log('🔍 updateCEOControls() called for player:', player);
+            const ceoPanel = document.getElementById('ceoControlPanel');
+            
+            // Try to find companies in different possible locations
+            let companies = null;
+            if (gameData?.companies) {
+                companies = gameData.companies;
+            } else if (gameData?.currentGame?.companies) {
+                companies = gameData.currentGame.companies;
+            }
+            
+            console.log('🔍 updateCEOControls - gameData:', gameData);
+            console.log('🔍 updateCEOControls - companies:', companies);
+            console.log('🔍 updateCEOControls - player.shares:', player.shares);
+            
+            if (!player.shares || !companies) {
+                console.log('❌ updateCEOControls - missing data, returning early');
+                return;
+            }
+            
+            // Find which company the player is CEO of
+            console.log('🔍 Checking CEO status for player:', player.name);
+            console.log('🔍 Player shares:', player.shares);
+            console.log('🔍 Available companies:', companies.map(c => ({ id: c.id, name: c.name, shares: c.shares })));
+            
+            const ceoCompany = companies.find(company => {
+                const shares = player.shares[company.id] || 0;
+                const percentage = (shares / company.shares) * 100;
+                console.log(`🔍 ${company.name}: ${shares} shares (${percentage.toFixed(1)}%)`);
+                return percentage >= 35;
+            });
+            
+            console.log('🔍 CEO company found:', ceoCompany);
+            if (!ceoCompany) {
+                console.log('❌ No CEO company found - player does not own 35%+ of any company');
+                return;
+            }
+            
+            ceoPanel.innerHTML = `
+                <h4>Managing: ${ceoCompany.name}</h4>
+                <div style="margin: 10px 0;">
+                    <label>Lemonade Price: $${ceoCompany.price?.toFixed(2) || '1.50'}</label><br>
+                    <input type="range" min="0.50" max="3.00" step="0.05" value="${ceoCompany.price || 1.50}" 
+                           onchange="updateCompanyPrice('${ceoCompany.id}', this.value)" 
+                           style="width: 100%; margin: 5px 0;">
+                </div>
+                <div style="margin: 10px 0;">
+                    <label>Ingredient Quality: ${ceoCompany.quality || 5}/10</label><br>
+                    <input type="range" min="1" max="10" step="1" value="${ceoCompany.quality || 5}" 
+                           onchange="updateCompanyQuality('${ceoCompany.id}', this.value)" 
+                           style="width: 100%; margin: 5px 0;">
+                </div>
+                <div style="margin: 10px 0;">
+                    <label>CEO Salary: ${((ceoCompany.ceoSalary || 0.10) * 100).toFixed(1)}%</label><br>
+                    <input type="range" min="0.05" max="0.25" step="0.01" value="${ceoCompany.ceoSalary || 0.10}" 
+                           onchange="updateCEOSalary('${ceoCompany.id}', this.value)" 
+                           style="width: 100%; margin: 5px 0;">
+                </div>
+                <div style="margin: 10px 0;">
+                    <label>Marketing: ${((ceoCompany.marketing || 0.10) * 100).toFixed(1)}%</label><br>
+                    <input type="range" min="0.00" max="0.30" step="0.01" value="${ceoCompany.marketing || 0.10}" 
+                           onchange="updateMarketing('${ceoCompany.id}', this.value)" 
+                           style="width: 100%; margin: 5px 0;">
+                </div>
+            `;
+        }
+
+        function updateCompanyPrice(companyId, price) {
+            console.log('Update company price:', companyId, price);
+            
+            // Update the display immediately
+            const label = document.querySelector(`input[onchange*="updateCompanyPrice('${companyId}'"]`).previousElementSibling;
+            if (label) {
+                label.textContent = `Lemonade Price: $${parseFloat(price).toFixed(2)}`;
+            }
+            
+            // TODO: Send update to server
+        }
+
+        function updateCompanyQuality(companyId, quality) {
+            console.log('Update company quality:', companyId, quality);
+            
+            // Update the display immediately
+            const label = document.querySelector(`input[onchange*="updateCompanyQuality('${companyId}'"]`).previousElementSibling;
+            if (label) {
+                label.textContent = `Ingredient Quality: ${quality}/10`;
+            }
+            
+            // TODO: Send update to server
+        }
+
+        function updateCEOSalary(companyId, salary) {
+            console.log('Update CEO salary:', companyId, salary);
+            
+            // Update the display immediately
+            const label = document.querySelector(`input[onchange*="updateCEOSalary('${companyId}'"]`).previousElementSibling;
+            if (label) {
+                label.textContent = `CEO Salary: ${(parseFloat(salary) * 100).toFixed(1)}%`;
+            }
+            
+            // TODO: Send update to server
+        }
+
+        function updateMarketing(companyId, marketing) {
+            console.log('Update marketing:', companyId, marketing);
+            
+            // Update the display immediately
+            const label = document.querySelector(`input[onchange*="updateMarketing('${companyId}'"]`).previousElementSibling;
+            if (label) {
+                label.textContent = `Marketing: ${(parseFloat(marketing) * 100).toFixed(1)}%`;
+            }
+            
+            // TODO: Send update to server
+        }
+
+        function closeFullScreenDisplay() {
+            console.log('🔄 Closing full screen display - returning to trading interface');
+            manualNavigation = true; // Prevent automatic phase switching
+            currentDisplayMode = 'trading'; // Set display mode
+            
+            document.getElementById('mainGameDisplay').style.display = 'block';
+        }
+
+
+        function enterLobby() {
+            console.log('🚀 enterLobby() called');
+            console.log('Socket status:', socket ? 'exists' : 'null', socket?.connected ? 'connected' : 'disconnected');
+            
+            // Clear all cache and reset game state before entering lobby
+            console.log('🧹 Clearing all cache and resetting game state...');
+            console.log('🔍 Current gameData before reset:', gameData);
+            
+            if (socket && socket.connected) {
+                socket.emit('resetGame');
+                console.log('✅ Reset game request sent to server');
+            } else {
+                console.log('❌ Socket not connected - cannot send reset request');
+            }
+            
+            // Clear frontend cache
+            gameData = null;
+            console.log('✅ Frontend cache cleared');
+            console.log('🔍 gameData after reset:', gameData);
+            
+            document.getElementById('welcomePage').style.display = 'none';
+            document.getElementById('lobby').style.display = 'block';
+            
+            // Don't auto-join - let user enter their name and join manually
+            if (socket && socket.connected) {
+                document.getElementById('joinButton').disabled = false;
+                console.log('✅ Join button enabled');
+            } else {
+                console.log('⚠️ Socket not connected, join button remains disabled');
+            }
+        }
+
+        function resetGame() {
+            console.log('🔄 Resetting game to lobby phase...');
+            if (socket) {
+                socket.emit('resetGame');
+            }
+            // Also reset local state
+            gameData = null;
+            participant = null;
+            document.getElementById('participantInfo').style.display = 'none';
+            document.getElementById('joinForm').style.display = 'block';
+            document.getElementById('participantName').value = '';
+            document.getElementById('joinButton').disabled = true;
+        }
+
+        // Minimal hooks to update live price text if gameData updates include prices
+        function reflectLivePrices() {
+            if (!gameData || !gameData.companies) return;
+            gameData.companies.forEach(c => {
+                const el = document.getElementById(`live_price_${c.id}`);
+                if (el && typeof c.currentPrice === 'number') {
+                    const prev = parseFloat(el.textContent?.replace(/[^0-9.\-]/g,'') || '0');
+                    el.textContent = `$${c.currentPrice.toFixed(2)}`;
+                    if (!isNaN(prev) && prev !== 0) {
+                        el.classList.remove('price-up','price-down');
+                        if (c.currentPrice > prev) el.classList.add('price-up');
+                        if (c.currentPrice < prev) el.classList.add('price-down');
+                    }
+                }
+            });
+        }
+
+        function updateParticipantsDisplay() {
+            // Check both gameData.participants and gameData.currentGame.participants
+            let participants = gameData.participants || (gameData.currentGame && gameData.currentGame.participants);
+            
+            // Also get companies data using the same pattern
+            let companies = gameData.companies || (gameData.currentGame && gameData.currentGame.companies);
+            
+            if (participants && Array.isArray(participants)) {
+                const participantsList = document.getElementById('participantsList');
+                participantsList.innerHTML = participants.map(participant => {
+                    let remainingCapital, totalStockValue, netWorth, totalWorth;
+                    
+                    // Use ledger data as source of truth if available
+                    if (window.ledgerData && window.ledgerData.ledgers && Array.isArray(window.ledgerData.ledgers)) {
+                        const ledger = window.ledgerData.ledgers.find(l => l.participantId === participant.id);
+                        if (ledger) {
+                            remainingCapital = ledger.cash || 0;
+                            totalStockValue = ledger.totalStockValue || 0;
+                            netWorth = ledger.totalNetWorth || 0;
+                            totalWorth = netWorth;
+                            console.log(`📊 Using ledger data for ${participant.name} (${participant.id}): Cash $${remainingCapital.toFixed(2)}, Stock $${totalStockValue.toFixed(2)}, Net $${netWorth.toFixed(2)}`);
+                        } else {
+                            console.log(`❌ No ledger found for ${participant.name} (${participant.id}), using fallback`);
+                        }
+                    } else {
+                        // Fallback to calculating from participant data
+                        const totalShares = participant.shares ? Object.values(participant.shares).reduce((sum, shares) => sum + shares, 0) : 0;
+                        remainingCapital = participant.remainingCapital !== undefined ? participant.remainingCapital : (participant.capital || 0);
+                        
+                        // Calculate current market value of shares
+                        totalStockValue = 0;
+                        if (participant.shares && companies) {
+                            companies.forEach(company => {
+                                const shares = participant.shares[company.id] || 0;
+                                const currentPrice = company.ipoPrice || company.finalPrice || company.currentPrice || 0;
+                                totalStockValue += shares * currentPrice;
+                            });
+                        }
+                        
+                        netWorth = remainingCapital + totalStockValue;
+                        totalWorth = netWorth;
+                        console.log(`📊 Using fallback calculation for ${participant.name}: Cash $${remainingCapital.toFixed(2)}, Stock $${totalStockValue.toFixed(2)}, Net $${netWorth.toFixed(2)}`);
+                    }
+                    const isHuman = participant.isHuman ? '👤' : '🤖';
+                    
+                    // Debug for human player
+                    if (participant.isHuman) {
+                        console.log('🔍 Participants display - Human player debug:', {
+                            name: participant.name,
+                            remainingCapital,
+                            totalStockValue,
+                            totalWorth: remainingCapital + totalStockValue,
+                            shares: participant.shares
+                        });
+                    }
+                    
+                    // Use ledger data if available (more accurate)
+                    if (window.ledgerData && window.ledgerData.ledgers && Array.isArray(window.ledgerData.ledgers)) {
+                        const ledger = window.ledgerData.ledgers.find(l => l.participantId === participant.id);
+                        if (ledger) {
+                            // Use ledger as source of truth - don't mix calculations
+                            remainingCapital = ledger.cash;
+                            totalStockValue = ledger.totalStockValue;
+                            netWorth = ledger.totalNetWorth;
+                        
+                            // Override the calculated values with ledger values
+                            totalWorth = netWorth;
+                            
+                            // Debug for human player
+                            if (participant.isHuman) {
+                                console.log('🔍 Frontend using ledger data for human player:', {
+                                    name: participant.name,
+                                    ledgerCash: ledger.cash,
+                                    ledgerStockValue: ledger.totalStockValue,
+                                    ledgerNetWorth: ledger.totalNetWorth,
+                                    oldCash: participant.remainingCapital,
+                                    oldStockValue: totalStockValue,
+                                    usingLedger: true
+                                });
+                            }
+                        } else {
+                            console.log(`❌ No ledger found for ${participant.name} (${participant.id}), using fallback calculation`);
+                        }
+                    } else {
+                        // Debug when ledger data is not available
+                        if (participant.isHuman) {
+                            console.log('🔍 Frontend using participant data (no ledger available):', {
+                                name: participant.name,
+                                participantCash: participant.remainingCapital,
+                                participantStockValue: totalStockValue,
+                                participantNetWorth: netWorth,
+                                usingLedger: false
+                            });
+                        }
+                    }
+                    
+                    // Show summary of holdings (compact)
+                    let holdingsSummary = '';
+                    if (gameData.companies && participant.shares) {
+                        const totalShares = Object.values(participant.shares).reduce((sum, shares) => sum + shares, 0);
+                        const companiesOwned = Object.values(participant.shares).filter(shares => shares > 0).length;
+                        holdingsSummary = `<p style="font-size: 0.9em; color: #64748b; margin: 5px 0;"><strong>Holdings:</strong> ${totalShares} shares across ${companiesOwned} companies</p>`;
+                    }
+                    
+                    // Check for CEO positions (compact) - use ledger data if available
+                    let ceoHTML = '';
+                    if (window.ledgerData && window.ledgerData.ceos) {
+                        // Use ledger data for CEO status
+                        const ceoInfo = window.ledgerData.ceos.find(ceo => ceo.participantId === participant.id);
+                        if (ceoInfo) {
+                            const company = gameData.companies?.find(c => c.id === ceoInfo.companyId);
+                            ceoHTML = `<p style="margin: 4px 0; font-size: 0.9em; color: #dc2626; font-weight: bold;">👑 CEO: ${company ? company.name : ceoInfo.companyId} (${ceoInfo.ownership}%)</p>`;
+                        }
+                    } else if (participant.shares && gameData.companies) {
+                        // Fallback to participant data
+                        const ceoCompanies = [];
+                        Object.keys(participant.shares).forEach(companyId => {
+                            const company = gameData.companies?.find(c => c.id === companyId);
+                            const shares = participant.shares[companyId];
+                            const percentage = (shares / company.shares) * 100;
+                            if (percentage >= 35) {
+                                ceoCompanies.push(`${company.name} (${percentage.toFixed(1)}%)`);
+                            }
+                        });
+                        if (ceoCompanies.length > 0) {
+                            ceoHTML = `<p style="margin: 4px 0; font-size: 0.9em; color: #dc2626; font-weight: bold;">👑 CEO: ${ceoCompanies.join(', ')}</p>`;
+                        }
+                    }
+                    
+                    return `
+                        <div style="border: 1px solid #e5e7eb; padding: 8px; margin: 4px 0; border-radius: 6px; background: ${participant.isHuman ? '#ecfdf5' : '#f3f4f6'}; cursor: pointer;" onclick="toggleParticipantDetails('${participant.id}')">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="font-weight: bold; font-size: 0.95em;">${participant.name} ${participant.isHuman ? '(You)' : ''}</span>
+                                <span style="font-weight: bold; color: #059669; font-size: 0.95em;">$${totalWorth.toFixed(2)}</span>
+                            </div>
+                            <div id="details-${participant.id}" style="display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid #d1d5db;">
+                                <p style="margin: 2px 0; font-size: 0.85em;"><strong>Cash:</strong> $${remainingCapital.toFixed(2)}</p>
+                                <p style="margin: 2px 0; font-size: 0.85em;"><strong>Stock Value:</strong> $${totalStockValue.toFixed(2)}</p>
+                                <p style="margin: 2px 0; font-size: 0.85em;"><strong>Total:</strong> $${totalWorth.toFixed(2)}</p>
+                                ${participant.shares && Object.keys(participant.shares).length > 0 ? `
+                                    <div style="margin-top: 8px;">
+                                        <p style="margin: 2px 0; font-size: 0.85em; font-weight: bold; color: #374151;">Stock Holdings:</p>
+                                        ${Object.keys(participant.shares).map(companyId => {
+                                            const shares = participant.shares[companyId];
+                                            if (shares > 0) {
+                                                const company = companies?.find(c => c.id === companyId);
+                                                const companyName = company ? company.name : companyId;
+                                                const currentPrice = company ? (company.ipoPrice || company.finalPrice || company.currentPrice || 0) : 0;
+                                                const value = shares * currentPrice;
+                                                const percentage = company ? (shares / company.shares) * 100 : 0;
+                                                return `<p style="margin: 1px 0; font-size: 0.8em; color: #6b7280; padding-left: 10px;">• ${shares} shares of ${companyName} @ $${currentPrice.toFixed(2)} = $${value.toFixed(2)} (${percentage.toFixed(1)}%)</p>`;
+                                            }
+                                            return '';
+                                        }).filter(html => html).join('')}
+                                    </div>
+                                ` : ''}
+                            </div>
+                            ${ceoHTML}
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                // Show debug info if no participants
+                const participantsList = document.getElementById('participantsList');
+                participantsList.innerHTML = '<p style="color: #dc2626;">No participants data available.</p><p style="color: #666; font-size: 0.8em;">GameData structure: ' + JSON.stringify(Object.keys(gameData || {})) + '</p>';
+            }
+            
+            // Debug: Check if the HTML was properly set
+            console.log('🔍 Participants display updated. HTML length:', participantsList.innerHTML.length);
+            console.log('🔍 First 200 chars:', participantsList.innerHTML.substring(0, 200));
+        }
+
+        function updateParticipantDisplay() {
+            if (participant) {
+                document.getElementById('joinForm').style.display = 'none';
+                document.getElementById('participantInfo').style.display = 'block';
+                document.getElementById('welcomeText').textContent = `Welcome, ${participant.name}! Capital: $${participant.capital}`;
+                
+                // Always show start button if we're in lobby phase
+                if (gameData && gameData.phase === 'lobby') {
+                    document.getElementById('startButton').style.display = 'inline-block';
+                } else {
+                    document.getElementById('startButton').style.display = 'none';
+                }
+            }
+        }
+
+        function joinGame() {
+            const name = document.getElementById('participantName').value.trim();
+            if (socket && name) {
+                // Use the existing session ID
+                socket.emit('joinGame', { name: name, sessionId: sessionId });
+                console.log('🎮 Joined game with session:', sessionId);
+            }
+        }
+
+        let isGameStarting = false;
+
+        function startGame() {
+            if (isGameStarting) {
+                console.log('⚠️ Game start already in progress - ignoring duplicate call');
+                return;
+            }
+            
+            if (socket) {
+                isGameStarting = true;
+                console.log('🚀 Starting game...');
+                socket.emit('startGame');
+                
+                // Browser-specific: Force game state update after a delay (but don't reset to fresh)
+                console.log('🔍 Current browser variable:', browser);
+                
+                // Fallback: detect browser directly if global variable isn't working
+                let currentBrowser = browser;
+                if (browser === 'other' || !browser) {
+                    const userAgent = navigator.userAgent;
+                    if (userAgent.includes('Edg')) {
+                        currentBrowser = 'edge';
+                    } else if (userAgent.includes('Edge')) {
+                        currentBrowser = 'edge';
+                    } else if (userAgent.includes('Chrome')) {
+                        currentBrowser = 'chrome';
+                    }
+                    console.log('🔍 Fallback browser detection:', currentBrowser);
+                }
+                
+                // DISABLED: Browser-specific timeout was causing IPO interface to revert to lobby
+                // The timeout was calling fetchGameState(false) which overrode the current display state
+                console.log(`🔄 ${currentBrowser} detected - timeout disabled to prevent phase override`);
+            } else {
+                console.error('❌ No socket connection available');
+                alert('Not connected to server. Please refresh the page.');
+            }
+        }
+
+        // IPO Bidding Functions
+        function updateIPOBiddingInterface() {
+            console.log('🔄 updateIPOBiddingInterface called, gameData:', gameData);
+            console.log('🔄 gameData exists:', !!gameData);
+            console.log('🔄 gameData.companies exists:', !!gameData?.companies);
+            console.log('🔄 companies length:', gameData?.companies?.length);
+            
+            if (!gameData || !gameData.companies) {
+                console.log('❌ No gameData or companies, returning');
+                console.log('❌ Will retry in 1 second...');
+                // Retry after 1 second to allow gameData to be populated
+                setTimeout(() => {
+                    if (gameData && gameData.companies) {
+                        console.log('🔄 Retry successful, updating IPO interface');
+                        updateIPOBiddingInterface();
+                    } else {
+                        console.log('❌ Retry failed, still no gameData or companies');
+                    }
+                }, 1000);
+                return;
+            }
+            
+            const biddingForm = document.getElementById('ipoBiddingForm');
+            const yourCapital = participant ? participant.capital : 1000;
+            
+            // Update capital display
+            document.getElementById('yourCapital').textContent = yourCapital.toFixed(2);
+            document.getElementById('remainingCapital').textContent = yourCapital.toFixed(2);
+            
+            // Generate 4-column IPO bidding layout
+            biddingForm.innerHTML = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 20px; margin: 20px 0;">
+                    ${gameData.companies.map((company, index) => `
+                        <div style="border: 2px solid #e5e7eb; padding: 20px; border-radius: 12px; background: #f9fafb;">
+                            <h4 style="margin-top: 0; color: #1f2937; text-align: center;">${company.name}</h4>
+                            <p style="margin: 8px 0; text-align: center;"><strong>Starting Price:</strong> $1.00</p>
+                            <p style="margin: 8px 0; text-align: center;"><strong>Shares Available:</strong> ${company.shares}</p>
+                            
+                            <div style="margin-top: 20px;">
+                                <div style="margin-bottom: 15px;">
+                                    <label for="shares_${index}" style="display: block; margin-bottom: 5px; font-weight: bold;">
+                                        Number of Shares:
+                                    </label>
+                            <input type="number" id="shares_${index}" min="0" max="${company.shares}" value="0" 
+                                           onchange="updateBidTotal()" 
+                                           aria-label="Number of shares for ${company.name}"
+                                           title="Enter number of shares to bid"
+                                           placeholder="0"
+                                           style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 1.1em;">
+                        </div>
+                                
+                                <div style="margin-bottom: 15px;">
+                                    <label for="price_${index}" style="display: block; margin-bottom: 5px; font-weight: bold;">
+                                        Price per Share ($):
+                                    </label>
+                            <input type="number" id="price_${index}" min="1.00" step="0.01" placeholder="1.00" 
+                                   onchange="updateBidTotal()" oninput="validatePrice(${index})" 
+                                           aria-label="Price per share for ${company.name}"
+                                           title="Enter price per share"
+                                           style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 1.1em;">
+                                    <div id="priceError_${index}" style="color: #dc2626; font-size: 12px; margin-top: 5px;"></div>
+                        </div>
+                                
+                                <div style="background: #ecfdf5; padding: 10px; border-radius: 6px; border: 1px solid #d1fae5; text-align: center;">
+                                    <label style="display: block; margin-bottom: 5px; font-weight: bold;">Total Bid:</label>
+                                    <span id="total_${index}" style="font-weight: bold; color: #059669; font-size: 1.2em;">$0.00</span>
+                        </div>
+                    </div>
+                </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function updateBidTotal() {
+            if (!gameData || !gameData.companies) return;
+            
+            let totalBidAmount = 0;
+            const yourCapital = participant ? participant.capital : 1000;
+            
+            gameData.companies.forEach((company, index) => {
+                const shares = parseInt(document.getElementById(`shares_${index}`)?.value || 0);
+                const price = parseFloat(document.getElementById(`price_${index}`)?.value || 0);
+                const total = shares * price;
+                
+                const totalElement = document.getElementById(`total_${index}`);
+                if (totalElement) {
+                    totalElement.textContent = `$${total.toFixed(2)}`;
+                }
+                
+                totalBidAmount += total;
+            });
+            
+            // Update remaining capital
+            const remaining = yourCapital - totalBidAmount;
+            document.getElementById('remainingCapital').textContent = remaining.toFixed(2);
+            
+            // Change color based on whether they can afford it
+            const remainingElement = document.getElementById('remainingCapital');
+            if (remaining < 0) {
+                remainingElement.style.color = '#dc2626';
+            } else {
+                remainingElement.style.color = '#059669';
+            }
+        }
+
+        function submitIPOBids() {
+            if (!gameData || !gameData.companies) return;
+            
+            const bids = [];
+            let totalBidAmount = 0;
+            const yourCapital = participant ? participant.capital : 1000;
+            
+            gameData.companies.forEach((company, index) => {
+                const shares = parseInt(document.getElementById(`shares_${index}`)?.value || 0);
+                const price = parseFloat(document.getElementById(`price_${index}`)?.value || 0);
+                
+                if (shares > 0 && price >= 1.00) {
+                    bids.push({
+                        companyId: company.id,
+                        shares: shares,
+                        price: price
+                    });
+                    totalBidAmount += shares * price;
+                } else if (shares > 0 && price > 0 && price < 1.00) {
+                    alert(`Price for ${company.name} must be at least $1.00 per share`);
+                    return;
+                }
+            });
+            
+            if (totalBidAmount > yourCapital) {
+                alert('You don\'t have enough capital for these bids!');
+                return;
+            }
+            
+            if (bids.length === 0) {
+                alert('Please place at least one bid or skip the IPO.');
+                return;
+            }
+            
+            // Submit bids to server
+            if (socket) {
+                console.log('📤 Submitting IPO bids:', bids);
+                socket.emit('submitIPOBids', { bids: bids });
+                console.log(`📝 Submitted ${bids.length} bid(s) totaling $${totalBidAmount.toFixed(2)}`);
+                
+                // Ready button is now shown in phase content - no need for separate advance button
+            } else {
+                console.error('❌ No socket connection available for IPO bid submission');
+                alert('Not connected to server. Please refresh the page.');
+            }
+        }
+
+        function skipIPO() {
+            if (socket) {
+                socket.emit('skipIPO');
+                alert('Skipped IPO - watching AI bots bid automatically');
+            }
+        }
+
+        function advancePhase() {
+            if (socket) {
+                console.log('⏰ Manual phase advancement requested');
+                socket.emit('advancePhase');
+                console.log('📤 advancePhase event emitted to backend');
+            } else {
+                console.error('❌ No socket connection available for phase advancement');
+                alert('Not connected to server. Please refresh the page.');
+            }
+        }
+
+        function forceIPOInterface() {
+            console.log('🔧 Forcing IPO interface update...');
+            if (gameData && gameData.phase === 'ipo') {
+                // Force multiple updates for Edge
+                updateIPOBiddingInterface();
+                document.getElementById('ipoInterface').style.display = 'block';
+                
+                // Edge-specific: Multiple forced updates
+                if (browser === 'edge') {
+                    console.log('🔧 Edge: Applying multiple forced updates...');
+                    setTimeout(() => {
+                        updateIPOBiddingInterface();
+                        document.getElementById('ipoInterface').style.display = 'block';
+                    }, 500);
+                    setTimeout(() => {
+                        updateIPOBiddingInterface();
+                        document.getElementById('ipoInterface').style.display = 'block';
+                    }, 1000);
+                }
+                
+                alert('IPO interface forced to update!');
+            } else {
+                alert('Game is not in IPO phase. Current phase: ' + (gameData?.phase || 'unknown'));
+            }
+        }
+
+        function validatePrice(index) {
+            const priceInput = document.getElementById(`price_${index}`);
+            const errorDiv = document.getElementById(`priceError_${index}`);
+            const price = parseFloat(priceInput.value);
+            
+            if (price > 0 && price < 1.00) {
+                errorDiv.textContent = 'Minimum price is $1.00';
+                priceInput.style.borderColor = '#dc2626';
+            } else {
+                errorDiv.textContent = '';
+                priceInput.style.borderColor = '#d1d5db';
+            }
+            
+            // Update bid total
+            updateBidTotal();
+        }
+
+        // Enable join button when name is entered
+        document.getElementById('participantName').addEventListener('input', function() {
+            const button = document.getElementById('joinButton');
+            button.disabled = !this.value.trim();
+        });
+
+        // Global browser variable
+        let browser = 'other';
+        
+        // Browser detection and compatibility
+        function detectBrowser() {
+            const userAgent = navigator.userAgent;
+            let browserType = 'other';
+            
+            console.log('🔍 Full User Agent:', userAgent);
+            console.log('🔍 Contains Chrome:', userAgent.includes('Chrome'));
+            console.log('🔍 Contains Edge:', userAgent.includes('Edge'));
+            console.log('🔍 Contains Edg:', userAgent.includes('Edg'));
+            
+            if (userAgent.includes('Edg')) {
+                console.log('🌐 Edge browser detected (Edg)');
+                browserType = 'edge';
+            } else if (userAgent.includes('Edge')) {
+                console.log('🌐 Edge browser detected (Edge)');
+                browserType = 'edge';
+            } else if (userAgent.includes('Chrome')) {
+                console.log('🌐 Chrome browser detected - applying compatibility fixes');
+                browserType = 'chrome';
+            } else {
+                console.log('🌐 Other browser detected:', userAgent);
+                browserType = 'other';
+            }
+            
+            // Update global browser variable
+            browser = browserType;
+            
+            // Update debug info
+            document.getElementById('userAgent').textContent = userAgent;
+            document.getElementById('browserType').textContent = browserType;
+            
+            return browserType;
+        }
+
+        // Track if this is initial page load
+        let isInitialLoad = true;
+        
+        // Fetch current game state (global function)
+        async function fetchGameState(forceFresh = false) {
+            try {
+                // Check if we should force a fresh start
+                const shouldFreshStart = isInitialLoad || forceFresh || 
+                    (gameData && (gameData.phase === 'trading' || gameData.phase === 'newspaper'));
+                
+                const freshParam = shouldFreshStart ? '&fresh=true' : '';
+                const apiUrl = `http://localhost:3001/api/game?session=${sessionId}${freshParam}`;
+                
+                if (shouldFreshStart) {
+                    console.log('🔄 Forcing fresh start - clearing old game data');
+                }
+                const response = await fetch(apiUrl);
+                
+                const data = await response.json();
+                if (data) {
+                    gameData = data;
+                    
+                    // Only fetch ledger data if game is in IPO phase or later
+                    if (gameData.phase === 'ipo' || gameData.phase === 'newspaper' || gameData.phase === 'trading') {
+                        try {
+                            const ledgerResponse = await fetch(`http://localhost:3001/api/ledger?session=${sessionId}&fresh=true&cb=${Date.now()}`);
+                            if (ledgerResponse.ok) {
+                                window.ledgerData = await ledgerResponse.json();
+                                console.log('📊 Ledger data loaded:', window.ledgerData);
+                            } else {
+                                console.log('📊 Ledger data not available yet');
+                                window.ledgerData = null;
+                            }
+                        } catch (ledgerError) {
+                            console.log('📊 Ledger data not available yet:', ledgerError.message);
+                            window.ledgerData = null;
+                        }
+                    } else {
+                        console.log('📊 Game not in IPO phase yet, skipping ledger fetch');
+                        window.ledgerData = null;
+                    }
+                    updateGameDisplay();
+                    const freshMsg = (isInitialLoad || forceFresh) ? '(fresh start)' : '(current state)';
+                    console.log('✅ Game state fetched successfully for session:', sessionId, freshMsg);
+                    isInitialLoad = false; // Mark that initial load is complete
+                }
+            } catch (error) {
+                console.error('❌ Failed to fetch game state:', error);
+            }
+        }
+        
+        // Initialize the game when page loads
+        function initializeGame() {
+            // Test backend connection on page load
+            testBackend();
+            
+            // Fresh start is now handled in fetchGameState() with &fresh=true parameter
+            
+            // Use shared session ID for multi-browser synchronization
+            sessionId = 'shared_game';
+            console.log('🔑 Session ID:', sessionId);
+        }
+        
+        // Initialize browser detection immediately
+        detectBrowser();
+        
+        // DISABLED: Initial fetchGameState was causing IPO interface to revert to lobby
+        // The game state is now fetched only when explicitly needed, not automatically
+        console.log('🔄 Initial game state fetch disabled to prevent phase override');
+        
+        // Show browser-specific buttons
+        if (browser === 'chrome' || browser === 'edge') {
+            console.log(`🔧 ${browser} detected - enabling debug buttons`);
+            // The force IPO button will be shown when needed
+        }
+        
+        // Edge-specific: Show Edge force button immediately
+        if (browser === 'edge') {
+            console.log('🔧 Edge: Enabling Edge-specific IPO fix button');
+            document.getElementById('edgeForceButton').style.display = 'inline-block';
+        }
+        
+        // Edge-specific: Add periodic IPO interface check
+        if (browser === 'edge') {
+                // Removed problematic setInterval that was causing IPO interface conflicts
+        }
+        
+        // Function to toggle participant details
+        function toggleParticipantDetails(participantId) {
+            const detailsDiv = document.getElementById(`details-${participantId}`);
+            if (detailsDiv) {
+                detailsDiv.style.display = detailsDiv.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+
+        // Initialize the game when the page loads
+        document.addEventListener('DOMContentLoaded', initializeGame);
+
+        // Periodic connection status check to ensure it stays visible
+        setInterval(() => {
+            testBackend();
+        }, 10000); // Check every 10 seconds
+
+        // Timer functions removed - using Ready button system instead
+
+        function updatePhaseDisplay(phase) {
+            const phaseElement = document.getElementById('currentPhase');
+            const timerElement = document.getElementById('phaseTimer');
+            const phaseIndicator = document.getElementById('currentPhaseIndicator');
+            
+            phaseElement.textContent = phase.toUpperCase();
+            
+            // Update the main phase indicator
+            if (phaseIndicator) {
+                let phaseText = '';
+                let phaseColor = '#1f2937';
+                
+                switch(phase) {
+                    case 'lobby':
+                        phaseText = '🎮 GAME PHASE: LOBBY';
+                        phaseColor = '#1f2937';
+                        break;
+                    case 'ipo':
+                        phaseText = '🎯 GAME PHASE: IPO STAGE';
+                        phaseColor = '#f59e0b';
+                        break;
+                    case 'newspaper':
+                        phaseText = '📰 GAME PHASE: NEWSPAPER STAGE';
+                        phaseColor = '#6b7280';
+                        break;
+                    case 'trading':
+                        phaseText = '📈 GAME PHASE: TRADING STAGE';
+                        phaseColor = '#059669';
+                        break;
+                    default:
+                        phaseText = `🎮 GAME PHASE: ${phase.toUpperCase()}`;
+                }
+                
+                phaseIndicator.textContent = phaseText;
+                phaseIndicator.parentElement.style.background = `linear-gradient(135deg, ${phaseColor} 0%, ${phaseColor}dd 100%)`;
+            }
+            
+            // MANUAL CONTROL: No more automatic timers - using Ready buttons instead
+            timerElement.style.display = 'none';
+            
+            // Set phase-specific styling
+            if (phase === 'trading') {
+                phaseElement.style.background = 'rgba(40, 167, 69, 0.3)';
+            } else if (phase === 'ipo') {
+                phaseElement.style.background = 'rgba(255, 193, 7, 0.3)';
+            } else if (phase === 'newspaper') {
+                phaseElement.style.background = 'rgba(108, 117, 125, 0.3)';
+            } else {
+                phaseElement.style.background = 'rgba(255,255,255,0.2)';
+            }
+        }
+
+        // OLD advancePhase function removed - using readyForNextPhase() instead
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neighborhood Stock Exchange</title>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+        }
+        
+        /* Welcome Page */
+        #welcomePage {
+            display: block;
+            text-align: center;
+            padding: 40px;
+            color: white;
+            min-height: 100vh;
+        }
+        
+        #welcomePage h1 {
+            font-size: 3em;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        #welcomePage p {
+            font-size: 1.5em;
+            margin-bottom: 30px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+        }
+        
+        .game-overview {
+            background: rgba(255,255,255,0.1);
+            padding: 30px;
+            border-radius: 15px;
+            margin: 30px auto;
+            max-width: 600px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .game-overview h3 {
+            margin-top: 0;
+        }
+        
+        .game-overview p {
+            margin: 10px 0;
+            font-size: 1.1em;
+        }
+        
+        .btn {
+            background: #059669;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.2em;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            margin-right: 10px;
+            transition: all 0.3s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+        }
+        
+        /* IPO Bidding Page */
+        #ipoPage {
+            display: none;
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            border-radius: 8px;
+        }
+        
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .success { background: #d1fae5; color: #065f46; }
+        .error { background: #fee2e2; color: #991b1b; }
+        .info { background: #dbeafe; color: #1e40af; }
+        
+        .companies {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        .company {
+            background: #fef3c7;
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid #f59e0b;
+        }
+        
+        .company h3 {
+            margin-top: 0;
+            color: #92400e;
+        }
+        
+        .bidding-form {
+            background: #f0fdf4;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border: 1px solid #10b981;
+        }
+        
+        .form-group {
+            margin: 10px 0;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 10px;
+            align-items: end;
+        }
+        
+        .form-row .form-group {
+            flex: 1;
+        }
+        
+        .btn-small {
+            padding: 8px 16px;
+            font-size: 0.9em;
+        }
+        
+        .btn-warning {
+            background: #f59e0b;
+        }
+        
+        .btn-success {
+            background: #10b981;
+        }
+        
+        .hidden { display: none; }
+        
+        /* Server Status Dots */
+        .server-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #10b981;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+            animation: pulse 2s infinite;
+        }
+        
+        .status-dot.offline {
+            background: #ef4444;
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Server Status Dots -->
+    <div class="server-status">
+        <div class="status-dot" id="serverDot1"></div>
+        <div class="status-dot" id="serverDot2"></div>
+    </div>
+
+    <!-- Welcome Page -->
+    <div id="welcomePage">
+        <h1>🍋 Neighborhood Stock Exchange</h1>
+        <p>Welcome to the Ultimate Investment Challenge!</p>
+        <div class="game-overview">
+            <h3>🎯 Game Overview</h3>
+            <p>• Start with $1,000 to invest in 4 lemonade stand companies</p>
+            <p>• Bid in IPO auctions to acquire shares</p>
+            <p>• Trade stocks in real-time markets</p>
+            <p>• Become CEO by owning 35%+ of any company</p>
+            <p>• Compete to see who has the greatest net worth!</p>
+        </div>
+        <button class="btn" onclick="enterGame()">🚀 Enter Game</button>
+    </div>
+
+    <!-- IPO Bidding Page -->
+    <div id="ipoPage">
+        <div class="header">
+            <h1>🎯 IPO Bidding Phase</h1>
+            <p>Place your bids for company shares in the Dutch auction</p>
+        </div>
+
+        <div id="status" class="status info">Waiting to start...</div>
+
+        <div class="companies" id="companiesList">
+            <!-- Companies will be populated here -->
+        </div>
+
+        <div style="text-align: center; margin: 30px 0;">
+            <button class="btn btn-warning" onclick="processAllIPOs()">Process All IPOs</button>
+        </div>
+    </div>
+
+    <!-- Newspaper Page -->
+    <div id="newspaperPage" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); z-index: 2000; overflow: hidden; font-family: 'Times New Roman', serif;">
+        
+        <!-- Newspaper Header -->
+        <div style="background: linear-gradient(135deg, #1f2937 0%, #374151 100%); color: white; padding: 20px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+            <h1 style="margin: 0; font-size: 3em; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);">📰 THE LEMONADE STAND TIMES</h1>
+            <p style="margin: 10px 0 0 0; font-size: 1.2em; font-style: italic;">Your Neighborhood's Premier Financial News</p>
+            <p style="margin: 5px 0 0 0; font-size: 1em; opacity: 0.9;">📅 <span id="newspaperDate"></span> | 🌤️ <span id="newspaperWeather"></span></p>
+        </div>
+
+            <!-- Main Content Area - NO SCROLLING, COMPACT LAYOUT -->
+            <div style="padding: 20px; max-width: 1400px; margin: 0 auto; height: calc(100vh - 120px); display: flex; flex-direction: column;">
+                
+                <!-- Top Row: IPO Results and CEO Appointments -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 15px; flex: 1;">
+                    
+                    <!-- Left Column: IPO Results -->
+                    <div style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border-left: 4px solid #059669;">
+                        <h3 style="color: #059669; margin: 0 0 10px 0; font-size: 1.2em; border-bottom: 2px solid #059669; padding-bottom: 5px;">📈 IPO RESULTS</h3>
+                        <div id="ipoResultsContent" style="font-size: 0.9em;"></div>
+                    </div>
+
+                    <!-- Right Column: CEO Appointments -->
+                    <div style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border-left: 4px solid #dc2626;">
+                        <h3 style="color: #dc2626; margin: 0 0 10px 0; font-size: 1.2em; border-bottom: 2px solid #dc2626; padding-bottom: 5px;">👑 CEO APPOINTMENTS</h3>
+                        <div id="ceoAppointmentsContent" style="font-size: 0.9em;"></div>
+                    </div>
+                </div>
+
+                <!-- Bottom Row: Market Summary, Weather, and Button -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                    
+                    <!-- Market Summary -->
+                    <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); padding: 15px; border-radius: 10px; border: 2px solid #0ea5e9;">
+                        <h3 style="color: #0ea5e9; margin: 0 0 10px 0; font-size: 1.1em; border-bottom: 2px solid #0ea5e9; padding-bottom: 5px;">📊 MARKET</h3>
+                        <div id="marketSummaryContent" style="font-size: 0.85em;"></div>
+                    </div>
+
+                    <!-- Weather & Events -->
+                    <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 15px; border-radius: 10px; border: 2px solid #f59e0b;">
+                        <h3 style="color: #f59e0b; margin: 0 0 10px 0; font-size: 1.1em; border-bottom: 2px solid #f59e0b; padding-bottom: 5px;">🌤️ WEATHER</h3>
+                        <div id="weatherEventsContent" style="font-size: 0.85em;"></div>
+                    </div>
+
+                    <!-- Start Trading Button -->
+                    <div style="background: linear-gradient(135deg, #059669 0%, #10b981 100%); padding: 15px; border-radius: 10px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
+                        <h3 style="color: white; margin: 0 0 10px 0; font-size: 1.1em;">🚀 READY TO TRADE?</h3>
+                        <button onclick="moveToTradingPhase()" style="background: white; color: #059669; padding: 12px 25px; font-size: 1em; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: all 0.3s ease;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">START TRADING</button>
+                    </div>
+                </div>
+            </div>
+    </div>
+
+    <script>
+        let gameState = null;
+        let socket = null;
+        let currentParticipantId = null;
+        let serverConnected = false;
+
+        function initializeSocket() {
+            if (typeof io === 'undefined') {
+                console.error('Socket.io not loaded, retrying...');
+                setTimeout(initializeSocket, 100);
+                return;
+            }
+            console.log('Socket.io loaded, connecting to server...');
+            socket = io('http://localhost:3003');
+
+            socket.on('connect', () => {
+                console.log('Connected to server');
+                serverConnected = true;
+                updateServerStatus();
+                showStatus('Connected to server', 'success');
+            });
+
+            socket.on('gameStateUpdate', (state) => {
+                console.log('📊 Game state updated:', state);
+                console.log('🔍 DEBUG: Companies in received state:', state.companies);
+                gameState = state;
+                updateDisplay();
+            });
+
+            socket.on('disconnect', () => {
+                console.log('🔌 Client disconnected:', socket.id);
+                serverConnected = false;
+                updateServerStatus();
+            });
+        }
+
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+        }
+
+        function updateServerStatus() {
+            const dot1 = document.getElementById('serverDot1');
+            const dot2 = document.getElementById('serverDot2');
+            
+            if (serverConnected) {
+                dot1.classList.remove('offline');
+                dot2.classList.remove('offline');
+            } else {
+                dot1.classList.add('offline');
+                dot2.classList.add('offline');
+            }
+        }
+
+        function enterGame() {
+            const name = prompt('Enter your name:');
+            if (name) {
+                // Add participant
+                fetch('/api/participant', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        currentParticipantId = data.participantId;
+                        showStatus(`Welcome ${name}!`, 'success');
+                        
+                        // Start IPO phase
+                        startIPO();
+                    } else {
+                        showStatus(`Error: ${data.error}`, 'error');
+                    }
+                });
+            }
+        }
+
+        function startIPO() {
+            fetch('/api/phase', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phase: 'ipo' })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showStatus('IPO phase started! Place your bids below.', 'success');
+                    document.getElementById('welcomePage').style.display = 'none';
+                    document.getElementById('ipoPage').style.display = 'block';
+                    
+                    // Game state is already loaded via socket connection
+                    // Just update the display if we have the state
+                    if (gameState) {
+                        console.log('Game state already loaded for IPO:', gameState);
+                        updateDisplay();
+                    } else {
+                        console.log('Waiting for game state from socket...');
+                        // The socket connection will provide the game state
+                    }
+                } else {
+                    showStatus(`Error: ${data.error}`, 'error');
+                }
+            });
+        }
+
+        function updateDisplay() {
+            if (!gameState) return;
+
+            // Update companies for bidding
+            const companiesList = document.getElementById('companiesList');
+            companiesList.innerHTML = '';
+            
+            for (const [id, company] of Object.entries(gameState.companies || {})) {
+                const companyDiv = document.createElement('div');
+                companyDiv.className = 'company';
+                companyDiv.innerHTML = `
+                    <h3>${company.name}</h3>
+                    <p><strong>Available Shares:</strong> ${company.totalShares || 1000}</p>
+                    <p><strong>Starting Price:</strong> $1.00 (minimum bid)</p>
+                    
+                    <div class="bidding-form">
+                        <h4>Your Bid</h4>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Shares:</label>
+                                <input type="number" id="shares_${id}" placeholder="Number of shares" min="0" max="1000" value="">
+                            </div>
+                            <div class="form-group">
+                                <label>Price per Share:</label>
+                                <input type="number" id="price_${id}" placeholder="Your bid price" step="0.01" min="0" value="">
+                            </div>
+                        </div>
+                    </div>
+                `;
+                companiesList.appendChild(companyDiv);
+            }
+        }
+
+
+        function processAllIPOs() {
+            if (!gameState || !gameState.companies || !currentParticipantId) {
+                showStatus('Please make sure you are logged in and the game is loaded', 'error');
+                return;
+            }
+
+            // First, collect all human bids from the forms
+            const humanBids = [];
+            Object.keys(gameState.companies).forEach(companyId => {
+                const sharesInput = document.getElementById(`shares_${companyId}`);
+                const priceInput = document.getElementById(`price_${companyId}`);
+                
+                // Only add bids if both fields have values > 0
+                if (sharesInput && priceInput && sharesInput.value > 0 && priceInput.value > 0) {
+                    humanBids.push({
+                        companyId: companyId,
+                        participantId: currentParticipantId,
+                        shares: parseInt(sharesInput.value),
+                        price: parseFloat(priceInput.value)
+                    });
+                }
+            });
+
+            // Allow processing even with no human bids (AI will still bid)
+            console.log(`Collected ${humanBids.length} human bids`);
+
+            showStatus('Submitting your bids and processing IPOs...', 'info');
+
+            // Submit all human bids first
+            const bidPromises = humanBids.map(bid => 
+                fetch('/api/ipo/bid', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(bid)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log(`Bid placed: ${bid.shares} shares at $${bid.price} for ${gameState.companies[bid.companyId].name}`);
+                    } else {
+                        console.error(`Error placing bid: ${data.error}`);
+                    }
+                })
+            );
+
+            // After all bids are submitted, process all IPOs
+            Promise.all(bidPromises)
+                .then(() => {
+                    console.log('All human bids submitted, processing IPOs...');
+                    
+                    // Process all IPOs sequentially to ensure proper state updates
+                    const processIPOsSequentially = async () => {
+                        const companyIds = Object.keys(gameState.companies);
+                        
+                        for (let i = 0; i < companyIds.length; i++) {
+                            const companyId = companyIds[i];
+                            try {
+                                const response = await fetch('/api/ipo/process', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ companyId })
+                                });
+                                
+                                const data = await response.json();
+                                console.log(`IPO response for ${gameState.companies[companyId].name}:`, data);
+                                if (data.success) {
+                                    console.log(`IPO processed for ${gameState.companies[companyId].name}: Clearing Price $${data.clearingPrice.toFixed(2)}`);
+                                } else {
+                                    console.error(`Error processing IPO for ${gameState.companies[companyId].name}: ${data.error}`);
+                                }
+                                
+                                // Small delay between IPOs to ensure state updates
+                                await new Promise(resolve => setTimeout(resolve, 500));
+                            } catch (error) {
+                                console.error(`Error processing IPO for ${gameState.companies[companyId].name}:`, error);
+                            }
+                        }
+                        
+                        // Wait a bit more for all state updates to propagate
+                        setTimeout(() => {
+                            showStatus(`IPO completed! All companies processed. Moving to newspaper phase...`, 'success');
+                            moveToNewspaperPhase();
+                        }, 2000);
+                    };
+                    
+                    processIPOsSequentially();
+                })
+                .catch(error => {
+                    console.error('Error submitting bids:', error);
+                    showStatus('Error submitting bids', 'error');
+                });
+        }
+
+        function moveToNewspaperPhase() {
+            // Hide IPO page, show newspaper page
+            document.getElementById('ipoPage').style.display = 'none';
+            document.getElementById('newspaperPage').style.display = 'block';
+            
+            // Use the current game state from socket updates instead of making API call
+            console.log('Moving to newspaper phase with current game state:', gameState);
+            updateNewspaperContent();
+        }
+
+        function updateNewspaperContent() {
+            console.log('Updating newspaper content with game state:', gameState);
+            console.log('Companies data:', gameState?.companies);
+            console.log('Participants data:', gameState?.participants);
+            console.log('Full game state keys:', Object.keys(gameState || {}));
+            console.log('Game state structure:', JSON.stringify(gameState, null, 2));
+            
+            // Set date and weather
+            const today = new Date();
+            const dateStr = today.toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+            document.getElementById('newspaperDate').textContent = dateStr;
+            
+            // Random weather
+            const weathers = ['☀️ Sunny', '⛅ Partly Cloudy', '🌧️ Rainy', '🌤️ Clear Skies', '🌦️ Light Rain'];
+            const randomWeather = weathers[Math.floor(Math.random() * weathers.length)];
+            document.getElementById('newspaperWeather').textContent = randomWeather;
+            
+            // IPO Results Content - COMPACT FORMAT
+            let ipoContent = '';
+            if (gameState && gameState.companies) {
+                console.log('Companies data for newspaper:', gameState.companies);
+                Object.values(gameState.companies).forEach(company => {
+                    console.log('Company data:', company);
+                    const ipoPrice = company.ipoPrice ? `$${company.ipoPrice.toFixed(2)}` : 'N/A';
+                    const currentPrice = company.currentPrice ? `$${company.currentPrice.toFixed(2)}` : 'N/A';
+                    const sharesSold = company.sharesAllocated || 0;
+                    const marketCap = sharesSold * (company.currentPrice || 0);
+                    
+                    ipoContent += `
+                        <div style="border-bottom: 1px solid #e5e7eb; padding: 8px 0; margin-bottom: 8px;">
+                            <div style="font-weight: bold; color: #1f2937; margin-bottom: 4px;">${company.name}</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; font-size: 0.8em;">
+                                <div>IPO: ${ipoPrice}</div>
+                                <div>Current: ${currentPrice}</div>
+                                <div>Sold: ${sharesSold}/1000</div>
+                                <div>Cap: $${marketCap.toFixed(0)}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+            } else {
+                console.log('No companies data available for newspaper');
+                ipoContent = '<div style="color: #6b7280; font-style: italic;">No IPO data available</div>';
+            }
+            document.getElementById('ipoResultsContent').innerHTML = ipoContent;
+            
+            // CEO Appointments Content - COMPACT FORMAT
+            let ceoContent = '';
+            if (gameState && gameState.companies) {
+                Object.values(gameState.companies).forEach(company => {
+                    const ceo = company.ceo ? gameState.participants[company.ceo] : null;
+                    if (ceo) {
+                        const sharesOwned = company.sharesAllocated || 0;
+                        const percentage = (sharesOwned / 10).toFixed(1);
+                        ceoContent += `
+                            <div style="background: #fef2f2; padding: 8px; border-radius: 6px; margin-bottom: 8px; border-left: 3px solid #dc2626;">
+                                <div style="font-weight: bold; color: #dc2626; margin-bottom: 4px; font-size: 0.9em;">${company.name}</div>
+                                <div style="font-weight: bold; color: #1f2937; font-size: 0.8em;">👑 ${ceo.name}</div>
+                                <div style="font-size: 0.75em; color: #6b7280;">${sharesOwned} shares (${percentage}%)</div>
+                            </div>
+                        `;
+                    } else {
+                        ceoContent += `
+                            <div style="background: #f9fafb; padding: 8px; border-radius: 6px; margin-bottom: 8px; border-left: 3px solid #9ca3af;">
+                                <div style="font-weight: bold; color: #6b7280; margin-bottom: 4px; font-size: 0.9em;">${company.name}</div>
+                                <div style="font-size: 0.8em; color: #6b7280;">No CEO appointed</div>
+                            </div>
+                        `;
+                    }
+                });
+            }
+            document.getElementById('ceoAppointmentsContent').innerHTML = ceoContent;
+            
+            // Market Summary Content - COMPACT FORMAT
+            const marketSummary = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div style="text-align: center; padding: 8px; background: white; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                        <div style="font-size: 0.8em; color: #0ea5e9; margin-bottom: 4px;">Companies</div>
+                        <div style="font-size: 1.5em; font-weight: bold; color: #1f2937;">${gameState?.companies ? Object.keys(gameState.companies).length : 0}</div>
+                    </div>
+                    <div style="text-align: center; padding: 8px; background: white; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                        <div style="font-size: 0.8em; color: #0ea5e9; margin-bottom: 4px;">Participants</div>
+                        <div style="font-size: 1.5em; font-weight: bold; color: #1f2937;">${gameState?.participants ? Object.keys(gameState.participants).length : 0}</div>
+                    </div>
+                    <div style="text-align: center; padding: 8px; background: white; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                        <div style="font-size: 0.8em; color: #0ea5e9; margin-bottom: 4px;">Shares Issued</div>
+                        <div style="font-size: 1.5em; font-weight: bold; color: #1f2937;">4000</div>
+                    </div>
+                    <div style="text-align: center; padding: 8px; background: white; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                        <div style="font-size: 0.8em; color: #0ea5e9; margin-bottom: 4px;">Status</div>
+                        <div style="font-size: 1em; font-weight: bold; color: #059669;">IPO Complete</div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('marketSummaryContent').innerHTML = marketSummary;
+            
+            // Weather & Events Content - COMPACT FORMAT
+            const weatherEvents = `
+                <div>
+                    <div style="margin-bottom: 8px;">
+                        <div style="font-weight: bold; color: #f59e0b; margin-bottom: 4px; font-size: 0.9em;">🌤️ Weather</div>
+                        <div style="font-size: 0.8em; color: #1f2937;">${randomWeather}</div>
+                        <div style="font-size: 0.7em; color: #6b7280;">+15-20% lemonade sales</div>
+                    </div>
+                    <div>
+                        <div style="font-weight: bold; color: #f59e0b; margin-bottom: 4px; font-size: 0.9em;">📰 Events</div>
+                        <div style="font-size: 0.8em; color: #1f2937;">IPO Complete</div>
+                        <div style="font-size: 0.7em; color: #6b7280;">Ready for trading</div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('weatherEventsContent').innerHTML = weatherEvents;
+        }
+
+        function moveToTradingPhase() {
+            // Redirect to trading page
+            window.location.href = '/trading.html';
+        }
+
+        // Initialize socket when page loads
+        initializeSocket();
+    </script>
+</body>
+</html>

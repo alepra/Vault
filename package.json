@@ -1,0 +1,41 @@
+{
+  "name": "lemonade-stand-clean",
+  "version": "1.0.0",
+  "description": "Clean Architecture Lemonade Stand Stock Market Game",
+  "main": "server/index.js",
+  "scripts": {
+    "dev": "concurrently --kill-others-on-fail --names \"BACKEND,FRONTEND\" --prefix-colors \"blue,green\" \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "node server/index.js",
+    "dev:frontend": "cd client && npm start",
+    "start": "node server/index.js",
+    "start:backend": "node server/index.js",
+    "start:frontend": "cd client && npm start",
+    "build": "cd client && npm run build",
+    "build:frontend": "cd client && npm run build",
+    "test": "node test.js",
+    "install:all": "npm install && cd client && npm install",
+    "predev": "node -e \"try { require('child_process').execSync('taskkill /F /IM node.exe 2>nul', {stdio: 'ignore'}) } catch(e) {}\"",
+    "postinstall": "echo ✅ Dependencies installed. Run 'npm run dev' to start both servers"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.16.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^4.18.2",
+    "prisma": "^6.16.2",
+    "socket.io": "^4.7.4",
+    "sqlite3": "^5.1.6"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "nodemon": "^3.0.2"
+  },
+  "keywords": [
+    "stock-market",
+    "game",
+    "multiplayer",
+    "clean-architecture"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
