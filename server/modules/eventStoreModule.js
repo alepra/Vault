@@ -18,6 +18,7 @@ class EventStoreModule {
         this.eventCache = new Map(); // Cache for current state calculations
         this.cacheExpiry = 5000; // 5 seconds
         this.lastCacheUpdate = 0;
+        this.companyPrices = new Map(); // Store current company prices
         
         console.log('📊 EventStore Module: Initializing...');
     }
@@ -400,14 +401,27 @@ class EventStoreModule {
     }
 
     /**
-     * Calculate total stock value from holdings
+     * Update company prices (called from game state or trading module)
+     */
+    updateCompanyPrices(companies) {
+        if (!companies || !Array.isArray(companies)) return;
+        
+        companies.forEach(company => {
+            const price = company.currentPrice || company.ipoPrice || 1.0;
+            this.companyPrices.set(company.id, price);
+        });
+    }
+    
+    /**
+     * Calculate total stock value from holdings using current market prices
      */
     calculateStockValue(holdings) {
         let totalValue = 0;
         for (const [companyId, holding] of Object.entries(holdings)) {
             if (holding && holding.shares) {
-                // Use a default price of $1 for now - this should be enhanced with real prices
-                totalValue += holding.shares * 1;
+                // Use current market price if available, otherwise default to $1
+                const price = this.companyPrices.get(companyId) || 1.0;
+                totalValue += holding.shares * price;
             }
         }
         return totalValue;

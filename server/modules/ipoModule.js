@@ -87,6 +87,7 @@ class IPOModule {
     this.isProcessing = false;
 
     // Initialize all participants in the ledger system
+    console.log(`📊 Initializing ${this.gameState.participants.length} participants in ledger...`);
     this.initializeParticipantsInLedger();
 
     // Ensure we have scavenger bots for liquidity
@@ -99,6 +100,9 @@ class IPOModule {
     // Both human and AI participants should be treated equally - they're just providing bids
     console.log(`👥 All participants:`, this.gameState.participants.map(p => `${p.name} (${p.isHuman ? 'Human' : 'AI'})`));
     console.log(`👥 IPO will wait for human input before processing any bids`);
+    
+    // Debug: Show initial ledger state
+    console.log(`📊 Initial ledger state:`, this.ledger.getAllLedgers().map(l => `${l.participantName}: $${l.cash}`));
     
     // IPO phase is now controlled by game state timer (20 seconds)
     // No separate IPO timer - let game state handle phase transitions
@@ -353,9 +357,13 @@ class IPOModule {
     this.isProcessing = true;
 
     // Ensure all participants are in ledger system
+    console.log(`📊 Ensuring ${this.gameState.participants.length} participants are in ledger...`);
     for (const participant of this.gameState.participants) {
       this.ensureParticipantInLedger(participant);
     }
+    
+    // Debug: Show ledger state before AI bidding
+    console.log(`📊 Ledger state before AI bidding:`, this.ledger.getAllLedgers().map(l => `${l.participantName}: $${l.cash}`));
 
     // Generate bids for each company
     console.log(`🔍 DEBUG: Starting IPO loop for ${this.gameState.companies.length} companies`);
@@ -453,6 +461,9 @@ class IPOModule {
     console.log('✅ AI bot bidding completed');
     this.isProcessing = false;
     
+    // Debug: Show final ledger state after AI bidding
+    console.log(`📊 Final ledger state after AI bidding:`, this.ledger.getAllLedgers().map(l => `${l.participantName}: $${l.cash}, Shares: ${(l.stockPositions || []).length} companies`));
+    
     // Complete the IPO and move to newspaper phase
     this.completeIPO();
     
@@ -469,7 +480,8 @@ class IPOModule {
     const normalPrices = [1.00, 1.25, 1.50, 1.75, 2.00, 2.25, 2.50, 2.75, 3.00];
     
     if (personality.bidStrategy === 'scavenger') {
-      // Scavenger bots always bid $1.00
+      // Scavenger bots ALWAYS bid at $1.00 (floor price)
+      // This ensures they provide baseline liquidity at the lowest price
       return 1.00; // Always $1.00 for scavengers
     } else if (personality.bidStrategy === 'ceo') {
       // CEO bots bid high
@@ -496,11 +508,12 @@ class IPOModule {
     const availableCash = ledger ? ledger.cash : participant.capital;
     
     if (personality.bidStrategy === 'scavenger') {
-      // Scavenger bots bid 250 shares at $1 on ALL four companies
-      // This ensures 3 scavengers × 250 shares = 750+ shares per company
-      const capitalToUse = availableCash * 0.25; // 25% per company (4 companies = 100% total)
-      const maxShares = Math.floor(capitalToUse / bidPrice);
-      return Math.max(250, Math.min(maxShares, 250)); // Always 250 shares for scavengers
+      // Scavenger bots ALWAYS bid 250 shares at $1.00 on ALL 4 companies
+      // This guarantees: 3 scavengers × 250 shares = 750 shares minimum per company
+      // Remaining 250 shares filled by other participants at higher prices
+      // Total capital needed: 4 companies × 250 shares × $1.00 = $1000 (exactly their budget)
+      // ALWAYS return 250, even if they don't have enough cash (Dutch auction will adjust)
+      return 250; // Fixed at 250 shares per company, no matter what
     } else if (personality.bidStrategy === 'ceo') {
       // CEO/Concentrated bots bid high share counts to become CEO
       const capitalToUse = availableCash * (0.6 + (personality.riskTolerance * 0.3)); // 60-90% of available cash
@@ -508,19 +521,19 @@ class IPOModule {
       return Math.max(200, Math.min(maxShares, 800)); // High share counts for CEO potential
     } else if (personality.bidStrategy === 'low') {
       // Conservative/Low strategy bots ALWAYS bid on all 4 companies with low shares/prices
-      const capitalToUse = availableCash * 0.2; // 20% per company (4 companies = 80% total)
+      const capitalToUse = availableCash * 0.25; // 25% per company (4 companies = 100% total) - INCREASED from 20%
       const maxShares = Math.floor(capitalToUse / bidPrice);
-      return Math.max(50, Math.min(maxShares, 200)); // Low share counts but consistent participation
+      return Math.max(100, Math.min(maxShares, 250)); // INCREASED minimum from 50 to 100
     } else if (personality.bidStrategy === 'high') {
       // Aggressive/High strategy bots bid on multiple companies with high share counts
-      const capitalToUse = availableCash * (0.6 + (personality.riskTolerance * 0.3)); // 60-90% of available cash
+      const capitalToUse = availableCash * (0.7 + (personality.riskTolerance * 0.2)); // 70-90% of available cash - INCREASED from 60-90%
       const maxShares = Math.floor(capitalToUse / bidPrice);
-      return Math.max(200, Math.min(maxShares, 700)); // High share counts for aggressive bidding
+      return Math.max(250, Math.min(maxShares, 700)); // INCREASED minimum from 200 to 250
     } else {
       // Default/Medium strategy bots - Diversified ALWAYS bid on all 4 companies
-      const capitalToUse = availableCash * 0.25; // 25% per company (4 companies = 100% total)
+      const capitalToUse = availableCash * 0.3; // 30% per company (more aggressive) - INCREASED from 25%
       const maxShares = Math.floor(capitalToUse / bidPrice);
-      return Math.max(100, Math.min(maxShares, 300)); // Moderate share counts for all 4 companies
+      return Math.max(150, Math.min(maxShares, 350)); // INCREASED minimum from 100 to 150
     }
   }
 
@@ -708,26 +721,17 @@ class IPOModule {
           }
           
           // Record purchase in ledger at CLEARING PRICE (not bid price)
-          let success;
-          if (this.eventStoreIntegration && this.eventStoreIntegration.isEventStoreEnabled()) {
-            success = await this.eventStoreIntegration.recordIPOPurchase(
-              participant.id,
-              company.id,
-              company.name,
-              sharesToAllocate,
-              clearingPrice,
-              'ipo'
-            );
-          } else {
-            success = this.ledger.recordPurchase(
-              participant.id,
-              company.id,
-              company.name,
-              sharesToAllocate,
-              clearingPrice, // Use clearing price, not bid price
-              'ipo'
-            );
-          }
+          // For now, use Legacy Ledger only during IPO phase
+          let success = this.ledger.recordPurchase(
+            participant.id,
+            company.id,
+            company.name,
+            sharesToAllocate,
+            clearingPrice, // Use clearing price, not bid price
+            'ipo'
+          );
+          
+          console.log(`📊 IPO Purchase: ${participant.name} bought ${sharesToAllocate} shares of ${company.name} at $${clearingPrice} = $${sharesToAllocate * clearingPrice}`);
           
           if (success) {
             const actualCost = sharesToAllocate * clearingPrice;

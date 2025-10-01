@@ -649,7 +649,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('readyForNextPhase', () => {
+  socket.on('readyForNextPhase', async () => {
     // Handle Ready button clicks for manual phase advancement
     console.log('🚀 User clicked Ready button - advancing to next phase');
     
@@ -667,6 +667,19 @@ io.on('connection', (socket) => {
       if (game.phase === 'newspaper') {
         game.phase = 'trading';
         console.log('✅ Advanced from newspaper to trading phase');
+        
+        // Transfer data from Legacy Ledger to Event Store
+        if (eventStoreIntegration && eventStoreIntegration.isEventStoreEnabled()) {
+          console.log('🔄 Transferring data from Legacy Ledger to Event Store...');
+          try {
+            await eventStoreIntegration.transferLedgerToEventStore();
+            console.log('✅ Data transfer completed successfully');
+          } catch (error) {
+            console.error('❌ Data transfer failed:', error);
+          }
+        } else {
+          console.log('⚠️ Event Store not enabled - skipping data transfer');
+        }
         
         // Create trading engine if it doesn't exist
         if (!sessionTrading[socket.sessionId]) {
@@ -767,18 +780,23 @@ io.on('connection', (socket) => {
                   } else {
                     console.log(`💾 Trade stored in database: ${trade.shares} shares of ${trade.companyId} at $${trade.price}`);
                   }
-                }
-              );
-            });
-            
-            // Emit to client
-            console.log(`📤 Emitting tradesExecuted to client: ${payload.trades.length} trades`);
-            io.to(socket.sessionId).emit('tradesExecuted', payload);
-          });
+            }
+          );
+        });
+        
+        // Update Event Store with latest company prices after trades
+        if (eventStoreIntegration && eventStoreIntegration.isEventStoreEnabled() && game && game.companies) {
+          eventStoreIntegration.updateCompanyPrices(game.companies);
         }
         
-        // Set participants and start trading
-        sessionTrading[socket.sessionId].setParticipants(game.participants);
+        // Emit to client
+        console.log(`📤 Emitting tradesExecuted to client: ${payload.trades.length} trades`);
+        io.to(socket.sessionId).emit('tradesExecuted', payload);
+      });
+    }
+    
+    // Set participants and start trading
+    sessionTrading[socket.sessionId].setParticipants(game.participants);
         const companies = game.companies.map(c => ({ 
           id: c.id, 
           name: c.name, 
@@ -892,7 +910,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('proceedToTrading', () => {
+  socket.on('proceedToTrading', async () => {
     // Handle proceeding to trading phase from any phase
     console.log('🚨 User force advancing to trading phase');
     
@@ -906,6 +924,19 @@ io.on('connection', (socket) => {
     if (game) {
       console.log(`🔍 Current phase: ${game.phase}, changing to trading`);
       game.phase = 'trading';
+      
+      // Transfer data from Legacy Ledger to Event Store
+      if (eventStoreIntegration && eventStoreIntegration.isEventStoreEnabled()) {
+        console.log('🔄 Transferring data from Legacy Ledger to Event Store...');
+        try {
+          await eventStoreIntegration.transferLedgerToEventStore();
+          console.log('✅ Data transfer completed successfully');
+        } catch (error) {
+          console.error('❌ Data transfer failed:', error);
+        }
+      } else {
+        console.log('⚠️ Event Store not enabled - skipping data transfer');
+      }
       
       // Create per-session trading engine
       if (!sessionTrading[socket.sessionId]) {
@@ -1159,6 +1190,14 @@ app.get('/api/event-store/participants', async (req, res) => {
     
     if (eventStoreIntegration.isEventStoreEnabled()) {
       console.log('🔍 Using Event Store for participants data');
+      
+      // Update company prices before calculating participant data
+      const sessionId = req.query.session || 'shared_game';
+      const game = gameStates[sessionId] || currentGame;
+      if (game && game.companies) {
+        eventStoreIntegration.updateCompanyPrices(game.companies);
+      }
+      
       const participants = await eventStoreIntegration.getAllParticipantsData();
       res.json({ success: true, data: participants });
     } else {

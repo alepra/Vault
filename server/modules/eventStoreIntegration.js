@@ -315,6 +315,87 @@ class EventStoreIntegration {
     }
 
     /**
+     * Transfer data from Legacy Ledger to Event Store
+     * This is called after IPO phase to sync all participant data
+     */
+    async transferLedgerToEventStore() {
+        if (!this.isEnabled || !this.eventStore || !this.legacyLedger) {
+            console.log('⚠️ Event Store or Legacy Ledger not available - skipping transfer');
+            return false;
+        }
+
+        try {
+            console.log('🔄 Event Store: Starting data transfer from Legacy Ledger...');
+            
+            // Get all participants from legacy ledger
+            const allLedgers = this.legacyLedger.getAllLedgers();
+            console.log(`📊 Event Store: Found ${allLedgers.length} participants in Legacy Ledger`);
+            
+            let transferredCount = 0;
+            
+            for (const ledger of allLedgers) {
+                const participantId = ledger.participantId;
+                const participantName = ledger.participantName;
+                const cash = ledger.cash || 0;
+                const stockPositions = ledger.stockPositions || [];
+                
+                console.log(`🔄 Event Store: Transferring ${participantName} (${participantId}) - Cash: $${cash}, Shares: ${stockPositions.length} companies`);
+                
+                // Don't record cash deposit - participant already has $1000 from initialization
+                // We just need to record the purchases which will deduct from that balance
+                
+                // Record all share purchases from stockPositions
+                for (const position of stockPositions) {
+                    if (position.totalShares > 0) {
+                        // Calculate average price from cost basis
+                        const averagePrice = position.costBasis / position.totalShares;
+                        const totalCost = position.costBasis; // Use the actual cost basis
+                        
+                        await this.eventStore.recordEvent({
+                            eventType: 'PURCHASE',
+                            participantId: participantId,
+                            companyId: position.companyId,
+                            shares: position.totalShares,
+                            price: averagePrice,
+                            amount: totalCost, // Add the amount field for proper tracking
+                            description: `IPO purchase transferred from Legacy Ledger: ${position.totalShares} shares at $${averagePrice.toFixed(2)}`,
+                            metadata: { 
+                                source: 'ledger_transfer', 
+                                participantName,
+                                companyName: position.companyName,
+                                phase: 'ipo_transfer'
+                            }
+                        });
+                        
+                        console.log(`  📈 Recorded ${position.totalShares} shares of ${position.companyName} at $${averagePrice.toFixed(2)} (total: $${totalCost.toFixed(2)})`);
+                    }
+                }
+                
+                transferredCount++;
+            }
+            
+            // Invalidate cache to ensure fresh data
+            this.eventStore.invalidateCache();
+            
+            console.log(`✅ Event Store: Successfully transferred ${transferredCount} participants from Legacy Ledger`);
+            return true;
+            
+        } catch (error) {
+            console.error('❌ Event Store: Failed to transfer data from Legacy Ledger:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Update company prices in Event Store for accurate net worth calculations
+     */
+    updateCompanyPrices(companies) {
+        if (this.isEnabled && this.eventStore) {
+            this.eventStore.updateCompanyPrices(companies);
+        }
+    }
+    
+    /**
      * Get Event Store status
      */
     getStatus() {

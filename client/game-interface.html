@@ -411,13 +411,17 @@
                             problematicCompanies.forEach(company => {
                                 // Check if any participants have shares of this company in their ledger
                                 if (window.ledgerData && window.ledgerData.ledgers) {
-                                    console.log(`🔍 Checking ledger data for ${company.name}:`, window.ledgerData.ledgers.map(l => ({
+                                    // Convert ledgers object to array for debugging
+                                    const ledgersArray = Array.isArray(window.ledgerData.ledgers) 
+                                        ? window.ledgerData.ledgers 
+                                        : Object.values(window.ledgerData.ledgers);
+                                    console.log(`🔍 Checking ledger data for ${company.name}:`, ledgersArray.map(l => ({
                                         participantId: l.participantId,
-                                        shares: l.shares,
+                                        shares: l.shares || l.stockPositions,
                                         companyShares: l.shares ? l.shares[company.id] : 0
                                     })));
                                     
-                                    const hasShares = window.ledgerData.ledgers.some(ledger => 
+                                    const hasShares = ledgersArray.some(ledger => 
                                         ledger.shares && ledger.shares[company.id] > 0
                                     );
                                     
@@ -450,6 +454,19 @@
                     // Only reset if we're in auto mode, otherwise keep current display
                     if (currentDisplayMode === 'auto') {
                         manualNavigation = false;
+                    }
+                    
+                    // CRITICAL: Clear Event Store cache when transitioning to trading phase
+                    if (game.phase === 'trading') {
+                        console.log('🧹 Trading phase detected - clearing Event Store cache and forcing refresh...');
+                        window.eventStoreData = null;
+                        window.ledgerData = null;
+                        // Force immediate refresh
+                        fetchLedgerData(0).then(() => {
+                            console.log('✅ Event Store data refreshed after trading phase transition');
+                            updateGameDisplay();
+                        });
+                        return; // Skip the regular updateGameDisplay, wait for fresh data
                     }
                 }
                 
@@ -2063,9 +2080,19 @@
                 if (shares instanceof Map) {
                     shareCount = shares.get(company.id) || 0;
                 } 
-                // Handle Object format
+                // Handle Object format (Event Store returns {companyId: {shares: X, totalInvested: Y}})
                 else if (typeof shares === 'object' && shares !== null) {
-                    shareCount = shares[company.id] || 0;
+                    const shareData = shares[company.id];
+                    if (shareData) {
+                        // Event Store format: {shares: 400, totalInvested: 960, averagePrice: 2.4}
+                        if (typeof shareData === 'object' && shareData.shares !== undefined) {
+                            shareCount = shareData.shares;
+                        } 
+                        // Legacy format: just a number
+                        else if (typeof shareData === 'number') {
+                            shareCount = shareData;
+                        }
+                    }
                 }
                 
                 const price = company.ipoPrice || company.currentPrice || 0;
@@ -2086,10 +2113,9 @@
                 }
             });
             
-            // If netWorth is still just cash, calculate it properly
-            if (netWorth === cash) {
-                netWorth = cash + stockValue;
-            }
+            // Always recalculate net worth from cash + stock value for accuracy
+            // Don't trust the Event Store's totalNetWorth since it uses hardcoded prices
+            netWorth = cash + stockValue;
             
             console.log('🔍 Final calculations - Cash:', cash, 'Stock Value:', stockValue, 'Net Worth:', netWorth);
             
@@ -2337,9 +2363,22 @@
                         totalStockValue = 0;
                         if (participant.shares && companies) {
                             companies.forEach(company => {
-                                const shares = participant.shares[company.id] || 0;
-                                const currentPrice = company.ipoPrice || company.finalPrice || company.currentPrice || 0;
-                                totalStockValue += shares * currentPrice;
+                                const shareData = participant.shares[company.id];
+                                let shareCount = 0;
+                                
+                                // Handle Event Store format
+                                if (typeof shareData === 'object' && shareData && shareData.shares !== undefined) {
+                                    shareCount = shareData.shares;
+                                } 
+                                // Handle legacy format (just a number)
+                                else if (typeof shareData === 'number') {
+                                    shareCount = shareData;
+                                }
+                                
+                                if (shareCount > 0) {
+                                    const currentPrice = company.ipoPrice || company.finalPrice || company.currentPrice || 0;
+                                    totalStockValue += shareCount * currentPrice;
+                                }
                             });
                         }
                         
@@ -2371,9 +2410,20 @@
                             totalStockValue = 0;
                             if (ledger.shares && typeof ledger.shares === 'object') {
                                 Object.keys(ledger.shares).forEach(companyId => {
-                                    const shareCount = ledger.shares[companyId];
+                                    const shareData = ledger.shares[companyId];
+                                    let shareCount = 0;
+                                    
+                                    // Handle Event Store format: {shares: 400, totalInvested: 960, averagePrice: 2.4}
+                                    if (typeof shareData === 'object' && shareData.shares !== undefined) {
+                                        shareCount = shareData.shares;
+                                    } 
+                                    // Handle legacy format: just a number
+                                    else if (typeof shareData === 'number') {
+                                        shareCount = shareData;
+                                    }
+                                    
                                     const company = gameData.companies.find(c => c.id === companyId);
-                                    if (company) {
+                                    if (company && shareCount > 0) {
                                         const price = company.ipoPrice || company.currentPrice || 0;
                                         totalStockValue += shareCount * price;
                                     }
@@ -2520,9 +2570,17 @@
             const name = document.getElementById('participantName').value.trim();
             console.log('🎮 joinGame() called with name:', name);
             if (socket && name) {
-                // Use the existing session ID
-                socket.emit('joinGame', { name: name, sessionId: sessionId });
-                console.log('🎮 Joined game with session:', sessionId);
+                // Reset the game first to ensure clean slate
+                console.log('🧹 Resetting game before joining...');
+                socket.emit('resetGame');
+                
+                // Wait a moment for reset to complete, then join
+                setTimeout(() => {
+                    // Use the existing session ID
+                    socket.emit('joinGame', { name: name, sessionId: sessionId });
+                    console.log('🎮 Joined game with session:', sessionId);
+                }, 500); // 500ms delay to ensure reset completes
+                
                 // Disable button to prevent multiple clicks
                 document.getElementById('joinButton').disabled = true;
             } else {
